@@ -1,0 +1,64 @@
+# Repo con frontend/ y backend/.
+# Las reglas sin "/" aplican en cualquier carpeta (ej. node_modules en ambos proyectos).
+
+# Dependencias
+node_modules
+.pnpm-store
+
+# Builds
+dist
+dist-ssr
+build
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Variables de entorno (credenciales, URLs de DB, secretos JWT)
+.env
+.env.*
+!.env.example
+*.local
+
+# Bases de datos locales y backups
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+
+# Archivos subidos en desarrollo
+uploads
+
+# Certificados y claves (ej. certificados de ARCA)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Tests / cobertura
+coverage
+.nyc_output
+
+# Editores y sistema operativo
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Claude Code (configuración local personal)
+.claude/settings.local.json
+CLAUDE.md

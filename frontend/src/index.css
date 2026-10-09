@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+
+@theme {
+  --color-kleta-rose: #d87093;
+  --color-kleta-pink: #e8a0bf;
+  --color-kleta-dark-pink: #c85a80;
+  --color-kleta-plum: #6a3b52;
+  --color-kleta-deep-plum: #4a283b;
+  --color-kleta-light-plum: #8b4a6b;
+  --color-kleta-sage: #8fa382;
+  --color-kleta-light-sage: #a3b899;
+  --color-kleta-bg: #faf7f8;
+  --color-kleta-blush: #fdeef4;
+  --color-kleta-card-bg: #ffffff;
+
+  --font-sans: 'Outfit', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+
+  --animate-fade-in: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@utility bg-pattern {
+  background-color: var(--color-kleta-bg);
+  background-image:
+    radial-gradient(var(--color-kleta-pink) 0.5px, transparent 0.5px),
+    radial-gradient(var(--color-kleta-pink) 0.5px, var(--color-kleta-bg) 0.5px);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    10px 10px;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}

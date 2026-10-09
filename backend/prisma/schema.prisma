@@ -1,0 +1,107 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+// La URL de conexión se define en prisma.config.ts (CLI) y en PrismaService (runtime).
+datasource db {
+  provider = "postgresql"
+}
+
+enum OperationType {
+  venta
+  compra
+}
+
+// Roles de usuario. `admin` gestiona todo; `vendedor` opera (ventas/compras y consultas).
+enum Role {
+  admin
+  vendedor
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  // Siempre en minúsculas (se normaliza al crear y al iniciar sesión).
+  username     String        @unique
+  // Hash bcrypt: la contraseña nunca se guarda ni se devuelve.
+  passwordHash String        @map("password_hash")
+  role         Role          @default(vendedor)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  sessions     AuthSession[]
+
+  @@map("users")
+}
+
+// Una sesión por inicio de sesión: su id va dentro del refresh token. Al cerrar sesión se borra y ese token deja de servir.
+model AuthSession {
+  id        String   @id @default(uuid())
+  userId    Int      @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+model Product {
+  id          Int              @id @default(autoincrement())
+  // Compartido por todas las variantes: al escanearlo se elige talle y color. Opcional: hay productos sin código
+  // (Postgres permite varios NULL en una columna única).
+  barcode     String?          @unique
+  name        String
+  description String?
+  // Precios comunes a todas las variantes de la prenda.
+  buyPrice    Decimal          @map("buy_price") @db.Decimal(12, 2)
+  sellPrice   Decimal          @map("sell_price") @db.Decimal(12, 2)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  // Soft delete: si tiene fecha, el producto está eliminado (se conserva por el historial de operaciones).
+  deletedAt   DateTime?        @map("deleted_at")
+  variants    ProductVariant[]
+
+  // Índice trigram: acelera la búsqueda por nombre tolerante a errores (ver ProductsService.search).
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_name_trgm_idx")
+  // Listado paginado (GET /products): filtra por deleted_at y ordena por nombre sin ordenar en memoria.
+  @@index([deletedAt, name, id], map: "products_deleted_at_name_id_idx")
+  @@map("products")
+}
+
+// Cada combinación de talle y color, con su propio stock.
+model ProductVariant {
+  id         Int         @id @default(autoincrement())
+  size       String
+  color      String
+  stock      Int         @default(0)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  productId  Int         @map("product_id")
+  // Cascade: al borrar un producto se borran sus variantes (si alguna tiene operaciones, el Restrict de Operation lo impide).
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  operations Operation[]
+
+  // No puede haber dos variantes iguales (ej. "M / Negro") del mismo producto.
+  @@unique([productId, size, color])
+  @@map("product_variants")
+}
+
+model Operation {
+  id        Int            @id @default(autoincrement())
+  type      OperationType
+  quantity  Int
+  // Precio al momento de la operación: si después cambia el precio del producto, el historial no se altera.
+  unitPrice Decimal        @map("unit_price") @db.Decimal(12, 2)
+  total     Decimal        @db.Decimal(12, 2)
+  createdAt DateTime       @default(now()) @map("created_at")
+  variantId Int            @map("variant_id")
+  // Restrict: no se puede borrar una variante que tenga operaciones registradas.
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([variantId])
+  // Búsqueda por rango de fechas (GET /operations): filtra y ordena por fecha sin ordenar en memoria.
+  @@index([createdAt, id])
+  @@map("operations")
+}
