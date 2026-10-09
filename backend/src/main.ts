@@ -11,6 +11,9 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN?.split(',') ?? 'http://localhost:5173',
     credentials: true,
   });
+  // Todas las rutas cuelgan de /api. En Vercel la API recibe la URL original (/api/...) y el proxy de Vite
+  // tampoco le saca el prefijo, así que en desarrollo y en producción las URLs son las mismas.
+  app.setGlobalPrefix('api');
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
