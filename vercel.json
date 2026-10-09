@@ -6,7 +6,8 @@
       "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
     },
     "api": {
-      "root": "backend/"
+      "root": "backend/",
+      "entrypoint": "src/main.ts"
     }
   },
   "rewrites": [
