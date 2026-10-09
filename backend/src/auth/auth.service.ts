@@ -18,8 +18,10 @@ const INVALID_CREDENTIALS = 'Usuario o contraseña incorrectos';
 export class AuthService {
   private readonly accessSecret: string;
   private readonly refreshSecret: string;
-  // Hash de relleno: si el usuario no existe se compara igual, para no revelar por el tiempo de respuesta qué usuarios existen.
-  private readonly dummyHash = bcrypt.hashSync('relleno', BCRYPT_ROUNDS);
+  // Hash de relleno (constante, para no gastar CPU al arrancar): si el usuario no existe se compara igual,
+  // para no revelar por el tiempo de respuesta qué usuarios existen.
+  private readonly dummyHash =
+    '$2b$12$o1lBqlcroTpoMmkEIkOCAOHTYdkUsAZT8aJD4/VfcDE.iNuBY4Ngu';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -97,11 +99,28 @@ export class AuthService {
     }
   }
 
-  /** Datos actuales del usuario autenticado (`GET /auth/me`). */
-  async getMe(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new UnauthorizedException('La sesión expiró');
-    return new UserResponseDto(user);
+  /**
+   * Recupera la sesión al abrir o recargar la página (`GET /auth/me`) en un solo pedido: si el access
+   * token sirve devuelve el usuario; si venció, usa el refresh token y devuelve además un access token
+   * nuevo (el controller lo guarda en la cookie).
+   */
+  async getMe(
+    accessToken: string | undefined,
+    refreshToken: string | undefined,
+  ): Promise<{ user: UserResponseDto; accessToken?: string }> {
+    if (accessToken) {
+      try {
+        const { sub } = await this.jwt.verifyAsync<AccessTokenPayload>(
+          accessToken,
+          { secret: this.accessSecret },
+        );
+        const user = await this.prisma.user.findUnique({ where: { id: sub } });
+        if (user) return { user: new UserResponseDto(user) };
+      } catch {
+        // Access token vencido o inválido: se intenta con el refresh token.
+      }
+    }
+    return this.refresh(refreshToken);
   }
 
   private signAccessToken(user: {

@@ -24,4 +24,9 @@ async function bootstrap() {
   );
   await app.listen(process.env.PORT ?? 3000);
 }
-await bootstrap();
+// Sin `await` a nivel de módulo: en Vercel `listen` queda capturado por el launcher y su promesa no se resuelve,
+// así que esperar a `bootstrap()` dejaría el import colgado (el sitio responde 500 a los 60 s).
+bootstrap().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -17,7 +17,7 @@ export const api = axios.create({
 })
 
 /** Endpoints de autenticación: un 401 acá es un error normal (credenciales, sesión vencida), no se reintenta. */
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout']
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/me']
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean }
 
