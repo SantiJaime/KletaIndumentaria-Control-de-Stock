@@ -7,12 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      // /api/products -> http://localhost:3000/products. Mismo origen que el front: las cookies
-      // de sesión funcionan sin CORS ni SameSite=None.
+      // /api/products -> http://localhost:3000/api/products (la API tiene el prefijo /api). Mismo origen
+      // que el front: las cookies de sesión funcionan sin CORS ni SameSite=None.
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
