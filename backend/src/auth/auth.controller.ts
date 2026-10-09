@@ -10,17 +10,18 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { REFRESH_COOKIE } from './auth.constants.js';
+import { ACCESS_COOKIE, REFRESH_COOKIE } from './auth.constants.js';
 import {
   clearAuthCookies,
   setAccessCookie,
   setRefreshCookie,
 } from './auth.cookies.js';
 import { AuthService } from './auth.service.js';
-import type { AccessTokenPayload } from './auth.types.js';
-import { CurrentUser } from './decorators/current-user.decorator.js';
 import { Public } from './decorators/public.decorator.js';
 import { LoginDto } from './dto/login.dto.js';
+
+const accessTokenOf = (req: Request) =>
+  (req.cookies as Record<string, string> | undefined)?.[ACCESS_COOKIE];
 
 const refreshTokenOf = (req: Request) =>
   (req.cookies as Record<string, string> | undefined)?.[REFRESH_COOKIE];
@@ -76,8 +77,21 @@ export class AuthController {
     clearAuthCookies(res, this.config);
   }
 
+  // Pública porque también recupera la sesión cuando el access token ya venció (usa el refresh token de
+  // la cookie); sin ninguna sesión válida responde 401.
+  @Public()
   @Get('me')
-  getMe(@CurrentUser() user: AccessTokenPayload) {
-    return this.authService.getMe(user.sub);
+  async getMe(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    try {
+      const { user, accessToken } = await this.authService.getMe(
+        accessTokenOf(req),
+        refreshTokenOf(req),
+      );
+      if (accessToken) setAccessCookie(res, this.config, accessToken);
+      return user;
+    } catch (error) {
+      clearAuthCookies(res, this.config);
+      throw error;
+    }
   }
 }
