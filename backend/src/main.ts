@@ -1,10 +1,17 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // En Vercel la app queda detrás de su proxy: la IP real del cliente llega en `X-Forwarded-For` (Vercel lo
+  // pisa, no se puede falsear). Hace falta para limitar los intentos de inicio de sesión por IP.
+  if (process.env.VERCEL) app.set('trust proxy', true);
+  // Cabeceras de seguridad (nosniff, sin `X-Powered-By`, etc.).
+  app.use(helmet());
   // Necesario solo si el front llama directo a la API desde otro origen (VITE_API_URL).
   // `credentials: true` permite enviar y recibir las cookies de sesión.
   app.enableCors({

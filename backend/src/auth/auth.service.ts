@@ -1,10 +1,18 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
+  LOGIN_ATTEMPTS_WINDOW_SECONDS,
+  MAX_LOGIN_ATTEMPTS_PER_IP,
+  MAX_LOGIN_ATTEMPTS_PER_USER,
   REFRESH_TOKEN_TTL_SECONDS,
 } from './auth.constants.js';
 import type { AccessTokenPayload, RefreshTokenPayload } from './auth.types.js';
@@ -36,19 +44,53 @@ export class AuthService {
     return bcrypt.hash(password, BCRYPT_ROUNDS);
   }
 
-  /** Verifica las credenciales y abre una sesión. Devuelve el usuario y los dos tokens. */
-  async login(username: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { username } });
-    const valid = await bcrypt.compare(
-      password,
-      user?.passwordHash ?? this.dummyHash,
+  /**
+   * Verifica las credenciales y abre una sesión. Devuelve el usuario y los dos tokens.
+   * Después de varios intentos seguidos desde la misma IP responde 429 hasta que pasen unos minutos.
+   */
+  async login(username: string, password: string, ip: string) {
+    const windowStart = new Date(
+      Date.now() - LOGIN_ATTEMPTS_WINDOW_SECONDS * 1000,
     );
+    const [attempts, user] = await Promise.all([
+      this.prisma.loginAttempt.findMany({
+        where: { ip, createdAt: { gte: windowStart } },
+        select: { username: true },
+        take: MAX_LOGIN_ATTEMPTS_PER_IP,
+      }),
+      this.prisma.user.findUnique({ where: { username } }),
+    ]);
+    if (
+      attempts.length >= MAX_LOGIN_ATTEMPTS_PER_IP ||
+      attempts.filter((attempt) => attempt.username === username).length >=
+        MAX_LOGIN_ATTEMPTS_PER_USER
+    ) {
+      // Los intentos bloqueados no se anotan: si no, seguir probando alargaría el bloqueo para siempre.
+      throw new HttpException(
+        'Demasiados intentos. Esperá unos minutos y probá de nuevo',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // El intento se anota mientras se compara la contraseña (no después): así varios pedidos simultáneos
+    // no alcanzan a probar muchas contraseñas antes de que se cuente el primero.
+    const [valid] = await Promise.all([
+      bcrypt.compare(password, user?.passwordHash ?? this.dummyHash),
+      this.prisma.loginAttempt.create({ data: { username, ip } }),
+    ]);
     if (!user || !valid) throw new UnauthorizedException(INVALID_CREDENTIALS);
 
-    // Aprovecha para limpiar las sesiones vencidas de este usuario.
-    await this.prisma.authSession.deleteMany({
-      where: { userId: user.id, expiresAt: { lt: new Date() } },
-    });
+    // Entró bien: se borran sus intentos (y los ya viejos de cualquiera) y las sesiones vencidas del usuario.
+    await Promise.all([
+      this.prisma.loginAttempt.deleteMany({
+        where: {
+          OR: [{ username, ip }, { createdAt: { lt: windowStart } }],
+        },
+      }),
+      this.prisma.authSession.deleteMany({
+        where: { userId: user.id, expiresAt: { lt: new Date() } },
+      }),
+    ]);
     const session = await this.prisma.authSession.create({
       data: {
         userId: user.id,

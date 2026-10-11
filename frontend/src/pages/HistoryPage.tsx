@@ -9,7 +9,8 @@ import { formatDateTime, formatMoney, todayIso } from '../lib/format'
 import { variantLabel } from '../lib/variants'
 import { zodValidate } from '../lib/zodFormik'
 import { historyFilterSchema, type HistoryFilterValues } from '../schemas/historyFilterSchema'
-import { OperationType, type OperationFilters } from '../types'
+import { OperationType, type ApiOperation, type OperationFilters } from '../types'
+import { CancelOperationModal } from './CancelOperationModal'
 import { OperationsTotalForm } from './OperationsTotalForm'
 
 const columns = [
@@ -19,6 +20,8 @@ const columns = [
   { label: 'Tipo' },
   { label: 'Cantidad', align: 'center' as const },
   { label: 'Monto Total', align: 'right' as const },
+  { label: 'Usuario' },
+  { label: 'Acciones', align: 'center' as const },
 ]
 
 const initialValues: HistoryFilterValues = { fromDate: '', toDate: '', term: '' }
@@ -47,6 +50,7 @@ export function HistoryPage() {
   const filterForm = useRef<FormikProps<HistoryFilterValues>>(null)
   const [totalDates, setTotalDates] = useState({ from: '', to: '' })
   const { result, isLoading, error, reload } = useOperationHistory(filters, page)
+  const [cancelling, setCancelling] = useState<ApiOperation | null>(null)
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -119,7 +123,7 @@ export function HistoryPage() {
           <MessageRow className="text-gray-400">No se encontraron operaciones en ese rango.</MessageRow>
         ) : (
           result.data.map((op) => (
-            <tr key={op.id} className="transition hover:bg-kleta-bg/50">
+            <tr key={op.id} className={`transition hover:bg-kleta-bg/50 ${op.cancelledAt ? 'opacity-60' : ''}`}>
               <td className="px-6 py-3.5 font-mono text-xs text-gray-500">{formatDateTime(new Date(op.createdAt))}</td>
               <td className="px-6 py-3.5 font-mono text-kleta-light-plum">{op.barcode ?? '—'}</td>
               <td className="px-6 py-3.5">
@@ -136,7 +140,30 @@ export function HistoryPage() {
                 </span>
               </td>
               <td className="px-6 py-3.5 text-center font-bold">{op.quantity}</td>
-              <td className="px-6 py-3.5 text-right font-bold text-kleta-plum">{formatMoney(op.total)}</td>
+              <td className={`px-6 py-3.5 text-right font-bold text-kleta-plum ${op.cancelledAt ? 'line-through' : ''}`}>
+                {formatMoney(op.total)}
+              </td>
+              <td className="px-6 py-3.5 text-gray-600">{op.username ?? '—'}</td>
+              <td className="px-6 py-3.5 text-center">
+                {op.cancelledAt ? (
+                  <span className="inline-block text-xs text-gray-500">
+                    <span className="rounded-full bg-gray-200 px-2.5 py-1 font-bold text-gray-600 uppercase">Anulada</span>
+                    <span className="mt-1 block whitespace-nowrap">
+                      {formatDateTime(new Date(op.cancelledAt))}
+                      {op.cancelledBy && ` · ${op.cancelledBy}`}
+                    </span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCancelling(op)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-red-600 transition hover:bg-red-50"
+                  >
+                    <i className="fa-solid fa-ban mr-1.5" />
+                    Anular
+                  </button>
+                )}
+              </td>
             </tr>
           ))
         )}
@@ -178,6 +205,17 @@ export function HistoryPage() {
       >
         <OperationsTotalForm initialFrom={totalDates.from} initialTo={totalDates.to} />
       </Modal>
+
+      {cancelling && (
+        <CancelOperationModal
+          operation={cancelling}
+          onClose={() => setCancelling(null)}
+          onCancelled={() => {
+            setCancelling(null)
+            reload()
+          }}
+        />
+      )}
     </div>
   )
 }

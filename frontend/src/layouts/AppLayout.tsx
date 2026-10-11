@@ -3,8 +3,8 @@ import { Sidebar } from '../components/Sidebar'
 
 /** Layout común a todas las páginas: la barra lateral adapta sus links según la sesión. */
 export function AppLayout() {
-  // El inventario tiene muchas columnas (más las acciones): necesita más ancho que el resto de las pantallas.
-  const isWide = useLocation().pathname === '/inventario'
+  // El inventario y el historial tienen muchas columnas (más las acciones): necesitan más ancho que el resto.
+  const isWide = ['/inventario', '/historial'].includes(useLocation().pathname)
 
   return (
     <div className="flex min-h-screen w-full flex-col md:flex-row">

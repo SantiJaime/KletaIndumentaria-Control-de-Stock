@@ -3,6 +3,10 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
   Post,
   Query,
 } from '@nestjs/common';
@@ -47,6 +51,17 @@ export class OperationsController {
         'Solo un administrador puede registrar compras',
       );
     }
-    return this.operationsService.create(createOperationDto);
+    return this.operationsService.create(createOperationDto, user.sub);
+  }
+
+  // Anula una operación (revierte el stock) y la devuelve ya marcada como anulada.
+  @Roles(Role.admin)
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.operationsService.cancel(id, user.sub);
   }
 }

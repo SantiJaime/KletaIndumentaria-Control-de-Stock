@@ -1,5 +1,5 @@
 import { api } from "../lib/api";
-import type { CreatedOperation, NewOperation, OperationFilters, OperationPage, OperationsTotal, OperationType } from "../types";
+import type { ApiOperation, CreatedOperation, NewOperation, OperationFilters, OperationPage, OperationsTotal, OperationType } from "../types";
 
 /** Una página de operaciones entre dos fechas (50 por página, de la más nueva a la más vieja). */
 export const getOperations = async (filters: OperationFilters, page = 1) => {
@@ -18,5 +18,11 @@ export const getOperationsTotal = async (params: { fromDate: string; toDate: str
 /** Registra una venta o compra; devuelve la operación y el producto con el stock actualizado. */
 export const createOperation = async (operation: NewOperation) => {
   const { data } = await api.post<CreatedOperation>("/operations", operation);
+  return data;
+};
+
+/** Anula una operación (solo admin): revierte el stock y la devuelve marcada como anulada. */
+export const cancelOperation = async (id: number) => {
+  const { data } = await api.post<ApiOperation>(`/operations/${id}/cancel`);
   return data;
 };

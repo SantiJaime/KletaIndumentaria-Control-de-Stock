@@ -1,11 +1,12 @@
 import { useFormik } from 'formik'
 import { useState } from 'react'
 import { PageHeader } from '../../components/PageHeader'
+import { useApp } from '../../context/appContext'
 import { useToast } from '../../context/toastContext'
 import { useInputSource } from '../../hooks/useInputSource'
 import { useProductSearch } from '../../hooks/useProductSearch'
 import { useProducts } from '../../hooks/useProducts'
-import type { FullProduct } from '../../types'
+import { Role, type FullProduct } from '../../types'
 import { zodValidate } from '../../lib/zodFormik'
 import { barcodeSchema, type BarcodeValues } from '../../schemas/barcodeSchema'
 import { ExistingProductPanel } from './ExistingProductPanel'
@@ -19,6 +20,8 @@ interface SearchState {
 
 export function OperationsPage() {
   const showToast = useToast()
+  // Solo el administrador puede dar de alta productos.
+  const canCreateProducts = useApp().user?.role === Role.Admin
   const { product, status, error, searchByBarcode, selectProduct, createProduct, addVariants, registerOperation, reset } =
     useProducts()
   const [search, setSearch] = useState<SearchState | null>(null)
@@ -30,11 +33,12 @@ export function OperationsPage() {
     setSearch((prev) => ({ code, id: (prev?.id ?? 0) + 1 }))
     const result = await searchByBarcode(code)
     if (result.status === 'found') showToast('Producto encontrado en base de datos')
-    else if (result.status === 'not-found') showToast('Producto no registrado. Completa el formulario.')
+    else if (result.status === 'not-found')
+      showToast(canCreateProducts ? 'Producto no registrado. Completa el formulario.' : 'Producto no registrado.')
     else if (result.status === 'error') showToast(result.error)
   }
 
-  // Enter (lector de códigos o código escrito a mano): se busca por código; si no existe, se da de alta.
+  // Enter (lector de códigos o código escrito a mano): se busca por código; si no existe, el admin lo da de alta.
   const barcodeForm = useFormik<BarcodeValues>({
     initialValues: { barcode: '' },
     validate: zodValidate(barcodeSchema),
@@ -118,7 +122,7 @@ export function OperationsPage() {
         {suggestions.results &&
           (suggestions.results.length === 0 ? (
             <p className="mt-3 text-xs text-gray-400">
-              No se encontraron productos. Si es un código nuevo, apretá Enter para darlo de alta.
+              No se encontraron productos.{canCreateProducts && ' Si es un código nuevo, apretá Enter para darlo de alta.'}
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100">
@@ -176,8 +180,21 @@ export function OperationsPage() {
         />
       )}
 
-      {search && status === 'not-found' && (
+      {search && status === 'not-found' && canCreateProducts && (
         <NewProductPanel key={search.id} barcode={search.code} onCreate={createProduct} />
+      )}
+
+      {search && status === 'not-found' && !canCreateProducts && (
+        <div
+          role="alert"
+          className="animate-fade-in rounded-2xl border-2 border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-700 shadow-sm"
+        >
+          <p className="flex items-center justify-center gap-2 font-semibold">
+            <i className="fa-solid fa-circle-exclamation" />
+            No hay ningún producto con el código {search.code}.
+          </p>
+          <p className="mt-1 text-xs">Revisá el código o pedile a un administrador que dé de alta el producto.</p>
+        </div>
       )}
     </div>
   )

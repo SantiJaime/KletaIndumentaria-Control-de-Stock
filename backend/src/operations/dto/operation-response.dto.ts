@@ -1,8 +1,15 @@
 import type { OperationType, Prisma } from '../../generated/prisma/client.js';
 
-// Lo que devuelve Prisma al buscar una operación incluyendo su variante y producto.
-export type OperationWithProduct = Prisma.OperationGetPayload<{
-  include: { variant: { include: { product: true } } };
+// Relaciones que hay que traer para armar la respuesta: variante y producto, quién la registró y quién la anuló.
+export const operationInclude = {
+  variant: { include: { product: true } },
+  user: { select: { username: true } },
+  cancelledBy: { select: { username: true } },
+} satisfies Prisma.OperationInclude;
+
+// Lo que devuelve Prisma al buscar una operación con `operationInclude`.
+export type OperationWithRelations = Prisma.OperationGetPayload<{
+  include: typeof operationInclude;
 }>;
 
 // Forma en que la API devuelve una operación: montos como number y datos del producto aplanados.
@@ -19,8 +26,14 @@ export class OperationResponseDto {
   productId: number;
   barcode: string | null;
   name: string;
+  /** Usuario que la registró; `null` en las operaciones viejas, de antes de guardarlo. */
+  username: string | null;
+  /** Fecha ISO de la anulación; `null` si la operación está vigente. */
+  cancelledAt: string | null;
+  /** Usuario que la anuló. */
+  cancelledBy: string | null;
 
-  constructor(operation: OperationWithProduct) {
+  constructor(operation: OperationWithRelations) {
     const { variant } = operation;
     this.id = operation.id;
     this.createdAt = operation.createdAt.toISOString();
@@ -34,5 +47,8 @@ export class OperationResponseDto {
     this.productId = variant.product.id;
     this.barcode = variant.product.barcode;
     this.name = variant.product.name;
+    this.username = operation.user?.username ?? null;
+    this.cancelledAt = operation.cancelledAt?.toISOString() ?? null;
+    this.cancelledBy = operation.cancelledBy?.username ?? null;
   }
 }

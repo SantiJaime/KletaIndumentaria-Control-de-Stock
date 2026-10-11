@@ -1,6 +1,6 @@
 import {
   OperationResponseDto,
-  type OperationWithProduct,
+  type OperationWithRelations,
 } from './operation-response.dto.js';
 
 // Respuesta de GET /operations: una página de operaciones con los datos para paginar.
@@ -12,7 +12,7 @@ export class PaginatedOperationsResponseDto {
   totalPages: number;
 
   constructor(
-    operations: OperationWithProduct[],
+    operations: OperationWithRelations[],
     total: number,
     page: number,
     pageSize: number,
