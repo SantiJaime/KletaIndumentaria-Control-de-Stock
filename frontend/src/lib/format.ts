@@ -16,12 +16,6 @@ export function toIsoDate(date: Date): string {
 /** Fecha de hoy en formato ISO (yyyy-mm-dd). */
 export const todayIso = () => toIsoDate(new Date())
 
-/** Convierte la fecha de una operación ("dd/mm/yyyy hh:mm") a "yyyy-mm-dd". */
-export function operationDayIso(operationDate: string): string {
-  const [day, month, year] = operationDate.split(' ')[0].split('/')
-  return `${year}-${month}-${day}`
-}
-
 /** "yyyy-mm-dd" → "dd/mm/yyyy" */
 export function formatIsoDate(iso: string): string {
   const [year, month, day] = iso.split('-')

@@ -51,9 +51,10 @@ export function ExistingProductPanel({
   onAddVariants,
   onDone,
 }: ExistingProductPanelProps) {
-  const { user, addOperation } = useApp()
-  // El vendedor solo puede registrar ventas.
-  const operationOptions = user?.role === Role.Admin ? [saleOption, purchaseOption] : [saleOption]
+  const { user } = useApp()
+  const isAdmin = user?.role === Role.Admin
+  // El vendedor solo puede registrar ventas (y tampoco agregar variantes).
+  const operationOptions = isAdmin ? [saleOption, purchaseOption] : [saleOption]
   const showToast = useToast()
   const schema = useMemo(() => createOperationSchema(product.variants), [product.variants])
   const [variantModalOpen, setVariantModalOpen] = useState(false)
@@ -132,7 +133,6 @@ export function ExistingProductPanel({
             showToast(result.error)
             return
           }
-          addOperation(result.data)
           showToast(`Operación (${type.toUpperCase()}) registrada correctamente`)
           onDone()
         }}
@@ -146,14 +146,16 @@ export function ExistingProductPanel({
                 variants={product.variants}
                 disableOutOfStock={isSale}
                 action={
-                  <button
-                    type="button"
-                    onClick={() => setVariantModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg bg-kleta-blush px-3 py-1.5 text-xs font-semibold text-kleta-plum transition hover:bg-kleta-pink/30"
-                  >
-                    <i className="fa-solid fa-plus" />
-                    Nuevas variantes
-                  </button>
+                  isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setVariantModalOpen(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-kleta-blush px-3 py-1.5 text-xs font-semibold text-kleta-plum transition hover:bg-kleta-pink/30"
+                    >
+                      <i className="fa-solid fa-plus" />
+                      Nuevas variantes
+                    </button>
+                  )
                 }
               />
 

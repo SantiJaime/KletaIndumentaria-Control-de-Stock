@@ -45,19 +45,6 @@ export type NewProduct = Omit<Product, 'variants'> & {
   variants: NewVariant[]
 }
 
-export interface Operation {
-  id: number
-  date: string
-  productId: number
-  barcode: string | null
-  name: string
-  size: string
-  color: string
-  type: OperationType
-  quantity: number
-  total: number
-}
-
 /** Campos a cambiar de un producto (PATCH /products/:id). `barcode: null` le quita el código. */
 export interface UpdateProductInput {
   barcode: string | null
@@ -106,6 +93,12 @@ export interface ApiOperation {
   productId: number
   barcode: string | null
   name: string
+  /** Usuario que la registró; `null` en las operaciones viejas, de antes de guardarlo. */
+  username: string | null
+  /** Fecha ISO de la anulación; `null` si la operación está vigente. */
+  cancelledAt: string | null
+  /** Usuario que la anuló. */
+  cancelledBy: string | null
 }
 
 /** Respuesta paginada de GET /operations. */

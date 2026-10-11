@@ -27,6 +27,8 @@ import { UpdateVariantsDto } from './dto/update-variants.dto.js';
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
+  // Dar de alta productos y variantes es solo para administradores (el alta carga stock inicial).
+  @Roles(Role.admin)
   @Post()
   create(@Body() createProductDto: CreateProductDto) {
     return this.productsService.create(createProductDto);
@@ -59,6 +61,7 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
+  @Roles(Role.admin)
   @Post(':id/variants')
   addVariants(
     @Param('id', ParseIntPipe) id: number,
@@ -67,7 +70,7 @@ export class ProductsController {
     return this.productsService.addVariants(id, createVariantsDto);
   }
 
-  // Editar productos y variantes es solo para administradores.
+  // Editar productos y variantes también es solo para administradores.
   @Roles(Role.admin)
   @Patch(':id')
   update(

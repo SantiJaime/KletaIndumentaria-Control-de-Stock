@@ -22,15 +22,17 @@ enum Role {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
+  id                  Int           @id @default(autoincrement())
   // Siempre en minúsculas (se normaliza al crear y al iniciar sesión).
-  username     String        @unique
+  username            String        @unique
   // Hash bcrypt: la contraseña nunca se guarda ni se devuelve.
-  passwordHash String        @map("password_hash")
-  role         Role          @default(vendedor)
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  sessions     AuthSession[]
+  passwordHash        String        @map("password_hash")
+  role                Role          @default(vendedor)
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  sessions            AuthSession[]
+  operations          Operation[]   @relation("OperationUser")
+  cancelledOperations Operation[]   @relation("OperationCancelledBy")
 
   @@map("users")
 }
@@ -45,6 +47,18 @@ model AuthSession {
 
   @@index([userId])
   @@map("auth_sessions")
+}
+
+// Intentos de inicio de sesión (se borran al entrar bien): con ellos se limita cuántas veces se puede probar
+// una contraseña. Va en la base porque en serverless la memoria no se comparte entre instancias.
+model LoginAttempt {
+  id        Int      @id @default(autoincrement())
+  username  String
+  ip        String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ip, createdAt])
+  @@map("login_attempts")
 }
 
 model Product {
@@ -89,16 +103,24 @@ model ProductVariant {
 }
 
 model Operation {
-  id        Int            @id @default(autoincrement())
-  type      OperationType
-  quantity  Int
+  id            Int            @id @default(autoincrement())
+  type          OperationType
+  quantity      Int
   // Precio al momento de la operación: si después cambia el precio del producto, el historial no se altera.
-  unitPrice Decimal        @map("unit_price") @db.Decimal(12, 2)
-  total     Decimal        @db.Decimal(12, 2)
-  createdAt DateTime       @default(now()) @map("created_at")
-  variantId Int            @map("variant_id")
+  unitPrice     Decimal        @map("unit_price") @db.Decimal(12, 2)
+  total         Decimal        @db.Decimal(12, 2)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  variantId     Int            @map("variant_id")
   // Restrict: no se puede borrar una variante que tenga operaciones registradas.
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  // Quién la registró. Null en las operaciones anteriores a que se guardara el usuario.
+  userId        Int?           @map("user_id")
+  // Restrict: no se puede borrar un usuario con operaciones (se perdería quién las hizo).
+  user          User?          @relation("OperationUser", fields: [userId], references: [id], onDelete: Restrict)
+  // Anulación: la operación no se borra, queda marcada (con fecha y quién la anuló) y el stock se revierte.
+  cancelledAt   DateTime?      @map("cancelled_at")
+  cancelledById Int?           @map("cancelled_by_id")
+  cancelledBy   User?          @relation("OperationCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
 
   @@index([variantId])
   // Búsqueda por rango de fechas (GET /operations): filtra y ordena por fecha sin ordenar en memoria.

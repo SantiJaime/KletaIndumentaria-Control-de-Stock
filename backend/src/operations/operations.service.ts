@@ -10,7 +10,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProductResponseDto } from '../products/dto/product-response.dto.js';
 import { CreateOperationDto } from './dto/create-operation.dto.js';
 import { ProductsService } from '../products/products.service.js';
-import { OperationResponseDto } from './dto/operation-response.dto.js';
+import {
+  operationInclude,
+  OperationResponseDto,
+} from './dto/operation-response.dto.js';
 import { PaginatedOperationsResponseDto } from './dto/paginated-operations-response.dto.js';
 import { OperationsTotalResponseDto } from './dto/operations-total-response.dto.js';
 import { TotalOperationsQueryDto } from './dto/total-operations-query.dto.js';
@@ -86,7 +89,7 @@ export class OperationsService {
       this.prisma.operation.count({ where }),
       this.prisma.operation.findMany({
         where,
-        include: { variant: { include: { product: true } } },
+        include: operationInclude,
         // El id desempata operaciones con la misma fecha para que las páginas no se repitan ni salteen filas.
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * PAGE_SIZE,
@@ -101,11 +104,18 @@ export class OperationsService {
     );
   }
 
-  /** Monto total y cantidad de operaciones de un tipo entre dos fechas (inclusive), calculado en la base. */
+  /**
+   * Monto total y cantidad de operaciones de un tipo entre dos fechas (inclusive), calculado en la base.
+   * Las anuladas no cuentan.
+   */
   async getTotal(query: TotalOperationsQueryDto) {
     const { fromDate, toDate, type } = query;
     const { _sum, _count } = await this.prisma.operation.aggregate({
-      where: { type, createdAt: dateRangeFilter(fromDate, toDate) },
+      where: {
+        type,
+        createdAt: dateRangeFilter(fromDate, toDate),
+        cancelledAt: null,
+      },
       _sum: { total: true },
       _count: true,
     });
@@ -118,9 +128,9 @@ export class OperationsService {
 
   /**
    * Registra una venta (resta stock) o una compra (suma stock) de una variante.
-   * Devuelve la operación y el producto con el stock actualizado.
+   * Devuelve la operación y el producto con el stock actualizado. `userId` es quien la registra.
    */
-  create({ variantId, type, quantity }: CreateOperationDto) {
+  create({ variantId, type, quantity }: CreateOperationDto, userId: number) {
     return this.prisma.$transaction(async (tx) => {
       const variant = await tx.productVariant.findFirst({
         where: { id: variantId, product: { deletedAt: null } },
@@ -161,8 +171,9 @@ export class OperationsService {
           unitPrice,
           total: unitPrice.mul(quantity),
           variantId,
+          userId,
         },
-        include: { variant: { include: { product: true } } },
+        include: operationInclude,
       });
 
       const product = await tx.product.findUniqueOrThrow({
@@ -174,6 +185,57 @@ export class OperationsService {
         operation: new OperationResponseDto(operation),
         product: new ProductResponseDto(product),
       };
+    });
+  }
+
+  /**
+   * Anula una operación: queda en el historial marcada como anulada (con fecha y quién la anuló) y el stock
+   * vuelve a como estaba antes: la venta anulada lo devuelve y la compra anulada lo quita.
+   */
+  cancel(id: number, userId: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const operation = await tx.operation.findUnique({
+        where: { id },
+        include: { variant: true },
+      });
+      if (!operation) {
+        throw new NotFoundException(`No existe la operación ${id}`);
+      }
+
+      // La condición `cancelledAt: null` va en el mismo UPDATE: si dos anulaciones llegan a la vez,
+      // la segunda no revierte el stock de nuevo.
+      const { count } = await tx.operation.updateMany({
+        where: { id, cancelledAt: null },
+        data: { cancelledAt: new Date(), cancelledById: userId },
+      });
+      if (count === 0) {
+        throw new ConflictException('La operación ya estaba anulada');
+      }
+
+      const { variant, quantity } = operation;
+      if (operation.type === OperationType.venta) {
+        await tx.productVariant.update({
+          where: { id: variant.id },
+          data: { stock: { increment: quantity } },
+        });
+      } else {
+        // Las unidades de la compra pueden haberse vendido: el stock no puede quedar negativo.
+        const updated = await tx.productVariant.updateMany({
+          where: { id: variant.id, stock: { gte: quantity } },
+          data: { stock: { decrement: quantity } },
+        });
+        if (updated.count === 0) {
+          throw new ConflictException(
+            `No se puede anular la compra: habría que quitar ${quantity} unidades de ${variant.size} / ${variant.color} y en stock hay ${variant.stock}`,
+          );
+        }
+      }
+
+      const cancelled = await tx.operation.findUniqueOrThrow({
+        where: { id },
+        include: operationInclude,
+      });
+      return new OperationResponseDto(cancelled);
     });
   }
 }
