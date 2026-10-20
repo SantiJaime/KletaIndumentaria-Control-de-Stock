@@ -10,6 +10,7 @@
       "entrypoint": "src/main.ts"
     }
   },
+  "crons": [{ "path": "/api/health", "schedule": "0 12 * * *" }],
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "api" } },
     { "source": "/(.*)", "destination": { "service": "web" } }
