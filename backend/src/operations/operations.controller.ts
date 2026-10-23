@@ -14,6 +14,7 @@ import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { OperationType, Role } from '../generated/prisma/enums.js';
+import { productResponseFor } from '../products/dto/product-response.dto.js';
 import { CreateOperationDto } from './dto/create-operation.dto.js';
 import { TotalOperationsQueryDto } from './dto/total-operations-query.dto.js';
 import { ListOperationsQueryDto } from './dto/list-operations-query.dto.js';
@@ -38,7 +39,7 @@ export class OperationsController {
   }
 
   @Post()
-  create(
+  async create(
     @Body() createOperationDto: CreateOperationDto,
     @CurrentUser() user: AccessTokenPayload,
   ) {
@@ -51,7 +52,11 @@ export class OperationsController {
         'Solo un administrador puede registrar compras',
       );
     }
-    return this.operationsService.create(createOperationDto, user.sub);
+    const { operation, product } = await this.operationsService.create(
+      createOperationDto,
+      user.sub,
+    );
+    return { operation, product: productResponseFor(user.role)(product) };
   }
 
   // Anula una operación (revierte el stock) y la devuelve ya marcada como anulada.

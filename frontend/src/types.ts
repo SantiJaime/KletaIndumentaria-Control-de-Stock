@@ -65,8 +65,10 @@ export interface ProductPage {
   totalPages: number
 }
 
-export interface FullProduct extends Product {
+export interface FullProduct extends Omit<Product, 'buyPrice'> {
   id: number
+  /** La API solo lo envía al admin. */
+  buyPrice?: number
   description: string | null
   totalStock: number
 }

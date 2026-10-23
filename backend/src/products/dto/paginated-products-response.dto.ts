@@ -1,7 +1,4 @@
-import {
-  ProductResponseDto,
-  type ProductWithVariants,
-} from './product-response.dto.js';
+import type { ProductResponseDto } from './product-response.dto.js';
 
 // Respuesta de GET /products: una página del listado con los datos para paginar.
 export class PaginatedProductsResponseDto {
@@ -12,12 +9,12 @@ export class PaginatedProductsResponseDto {
   totalPages: number;
 
   constructor(
-    products: ProductWithVariants[],
+    data: ProductResponseDto[],
     total: number,
     page: number,
     pageSize: number,
   ) {
-    this.data = products.map((p) => new ProductResponseDto(p));
+    this.data = data;
     this.total = total;
     this.page = page;
     this.pageSize = pageSize;
