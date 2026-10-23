@@ -15,7 +15,7 @@ import { EditProductModal } from './inventory/EditProductModal'
 /** Por debajo de este stock se resalta el producto en rojo. */
 const LOW_STOCK_THRESHOLD = 5
 
-/** Lo que se muestra en lugar de un precio cuando el admin los oculta. */
+/** Lo que se muestra en lugar del precio de compra cuando el admin lo oculta. */
 const HIDDEN_PRICE = '*****'
 
 const adminColumns = [
@@ -35,9 +35,8 @@ export function InventoryPage() {
   // Editar y eliminar productos y ver el precio de compra es solo para administradores.
   const canManage = user?.role === Role.Admin
   const columns = canManage ? adminColumns : sellerColumns
-  // El admin puede ocultar los precios (por ejemplo, si un cliente ve la pantalla).
-  const [hidePrices, setHidePrices] = useState(false)
-  const showPrice = (price: number | undefined) => (hidePrices || price === undefined ? HIDDEN_PRICE : formatMoney(price))
+  // El admin puede ocultar el precio de compra (por ejemplo, si un cliente ve la pantalla).
+  const [hideBuyPrice, setHideBuyPrice] = useState(false)
   const [editing, setEditing] = useState<FullProduct | null>(null)
   const [deleting, setDeleting] = useState<FullProduct | null>(null)
   const [page, setPage] = useState(1)
@@ -67,12 +66,12 @@ export function InventoryPage() {
             {canManage && (
               <button
                 type="button"
-                onClick={() => setHidePrices(!hidePrices)}
-                aria-pressed={hidePrices}
+                onClick={() => setHideBuyPrice(!hideBuyPrice)}
+                aria-pressed={hideBuyPrice}
                 className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-kleta-plum shadow-sm transition hover:bg-kleta-blush"
               >
-                <i className={hidePrices ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'} />
-                {hidePrices ? 'Mostrar precios' : 'Ocultar precios'}
+                <i className={hideBuyPrice ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash'} />
+                {hideBuyPrice ? 'Mostrar precio de compra' : 'Ocultar precio de compra'}
               </button>
             )}
             <SearchInput value={query} onChange={setQuery} label="Buscar productos" onTrackInput={input.track} />
@@ -133,8 +132,12 @@ export function InventoryPage() {
                     ))}
                   </div>
                 </td>
-                {canManage && <td className="px-6 py-3.5 text-gray-600">{showPrice(p.buyPrice)}</td>}
-                <td className="px-6 py-3.5 font-bold text-kleta-rose">{showPrice(p.sellPrice)}</td>
+                {canManage && (
+                  <td className="px-6 py-3.5 text-gray-600">
+                    {hideBuyPrice || p.buyPrice === undefined ? HIDDEN_PRICE : formatMoney(p.buyPrice)}
+                  </td>
+                )}
+                <td className="px-6 py-3.5 font-bold text-kleta-rose">{formatMoney(p.sellPrice)}</td>
                 <td className="px-6 py-3.5 text-center">
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-bold whitespace-nowrap ${
