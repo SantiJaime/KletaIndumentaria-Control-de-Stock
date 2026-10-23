@@ -7,7 +7,6 @@ import {
 import type { Prisma } from '../generated/prisma/client.js';
 import { OperationType } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { ProductResponseDto } from '../products/dto/product-response.dto.js';
 import { CreateOperationDto } from './dto/create-operation.dto.js';
 import { ProductsService } from '../products/products.service.js';
 import {
@@ -128,7 +127,8 @@ export class OperationsService {
 
   /**
    * Registra una venta (resta stock) o una compra (suma stock) de una variante.
-   * Devuelve la operación y el producto con el stock actualizado. `userId` es quien la registra.
+   * Devuelve la operación y el producto con el stock actualizado (sin mapear: el controller elige la respuesta
+   * según el rol). `userId` es quien la registra.
    */
   create({ variantId, type, quantity }: CreateOperationDto, userId: number) {
     return this.prisma.$transaction(async (tx) => {
@@ -183,7 +183,7 @@ export class OperationsService {
 
       return {
         operation: new OperationResponseDto(operation),
-        product: new ProductResponseDto(product),
+        product,
       };
     });
   }

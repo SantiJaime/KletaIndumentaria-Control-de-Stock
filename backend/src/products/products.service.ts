@@ -11,8 +11,7 @@ import { CreateVariantsDto } from './dto/create-variants.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { UpdateVariantsDto } from './dto/update-variants.dto.js';
 import { sanitizeBarcode } from './barcode.util.js';
-import { PaginatedProductsResponseDto } from './dto/paginated-products-response.dto.js';
-import { ProductResponseDto } from './dto/product-response.dto.js';
+import type { ProductWithVariants } from './dto/product-response.dto.js';
 
 // Clave de una combinación sin distinguir mayúsculas: en la DB la restricción única sí las distingue.
 const variantKey = (v: { size: string; color: string }) =>
@@ -58,7 +57,7 @@ export class ProductsService {
   async create({
     variants,
     ...data
-  }: CreateProductDto): Promise<ProductResponseDto> {
+  }: CreateProductDto): Promise<ProductWithVariants> {
     if (data.sellPrice < data.buyPrice) {
       throw new BadRequestException(
         'El precio de venta no puede ser menor al de compra',
@@ -100,7 +99,7 @@ export class ProductsService {
         },
         include: withVariants,
       });
-      return new ProductResponseDto(product);
+      return product;
     } catch (error) {
       // Otra request creó el mismo código entre la verificación y el insert.
       if (isUniqueViolation(error)) {
@@ -114,7 +113,9 @@ export class ProductsService {
     }
   }
 
-  async findAll(page = 1): Promise<PaginatedProductsResponseDto> {
+  async findAll(
+    page = 1,
+  ): Promise<{ products: ProductWithVariants[]; total: number }> {
     const [total, products] = await this.prisma.$transaction([
       this.prisma.product.count({ where: notDeleted }),
       this.prisma.product.findMany({
@@ -126,14 +127,14 @@ export class ProductsService {
         take: PAGE_SIZE,
       }),
     ]);
-    return new PaginatedProductsResponseDto(products, total, page, PAGE_SIZE);
+    return { products, total };
   }
 
   /**
    * Busca por nombre con pg_trgm (similar a Atlas Search): encuentra coincidencias parciales
    * ("remer") y tolera pocos errores de tipeo ("remara"). Ordena de más a menos parecido.
    */
-  async findByName(name: string): Promise<ProductResponseDto[]> {
+  async findByName(name: string): Promise<ProductWithVariants[]> {
     const ids = await this.findIdsByName(name);
     const products = await this.prisma.product.findMany({
       where: { id: { in: ids }, ...notDeleted },
@@ -143,11 +144,11 @@ export class ProductsService {
     const byId = new Map(products.map((p) => [p.id, p]));
     return ids.flatMap((id) => {
       const product = byId.get(id);
-      return product ? [new ProductResponseDto(product)] : [];
+      return product ? [product] : [];
     });
   }
 
-  async findOne(id: number): Promise<ProductResponseDto> {
+  async findOne(id: number): Promise<ProductWithVariants> {
     const product = await this.prisma.product.findFirst({
       where: { id, ...notDeleted },
       include: withVariants,
@@ -155,28 +156,28 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundException(`No existe un producto con id ${id}`);
     }
-    return new ProductResponseDto(product);
+    return product;
   }
 
-  async findByBarcode(barcode: string): Promise<ProductResponseDto> {
+  async findByBarcode(barcode: string): Promise<ProductWithVariants> {
     const product = await this.findProductByBarcode(barcode);
     if (!product) {
       throw new NotFoundException(
         `No existe un producto con el código ${barcode}`,
       );
     }
-    return new ProductResponseDto(product);
+    return product;
   }
 
   /**
    * Para cuando no se sabe si el usuario escribió un código o un nombre: primero busca por código
    * exacto (si hay coincidencia es la respuesta) y, si no, por nombre. Siempre devuelve una lista.
    */
-  async findByBarcodeOrName(term: string): Promise<ProductResponseDto[]> {
+  async findByBarcodeOrName(term: string): Promise<ProductWithVariants[]> {
     const barcode = sanitizeBarcode(term);
     if (barcode) {
       const product = await this.findProductByBarcode(barcode);
-      if (product) return [new ProductResponseDto(product)];
+      if (product) return [product];
     }
     return this.findByName(term);
   }
@@ -227,7 +228,7 @@ export class ProductsService {
   async addVariants(
     productId: number,
     { variants }: CreateVariantsDto,
-  ): Promise<ProductResponseDto> {
+  ): Promise<ProductWithVariants> {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const product = await tx.product.findFirst({
@@ -259,7 +260,7 @@ export class ProductsService {
           where: { id: productId },
           include: withVariants,
         });
-        return new ProductResponseDto(updated);
+        return updated;
       });
     } catch (error) {
       // Otra request creó la misma variante entre la verificación y el insert.
@@ -276,7 +277,7 @@ export class ProductsService {
   async update(
     id: number,
     { barcode, ...data }: UpdateProductDto,
-  ): Promise<ProductResponseDto> {
+  ): Promise<ProductWithVariants> {
     const current = await this.prisma.product.findFirst({
       where: { id, ...notDeleted },
     });
@@ -316,7 +317,7 @@ export class ProductsService {
         data: { ...data, ...(barcode !== undefined && { barcode }) },
         include: withVariants,
       });
-      return new ProductResponseDto(product);
+      return product;
     } catch (error) {
       // Otra request tomó el mismo código entre la verificación y el update.
       if (isUniqueViolation(error)) {
@@ -335,7 +336,7 @@ export class ProductsService {
   async updateVariants(
     productId: number,
     { variants: changes }: UpdateVariantsDto,
-  ): Promise<ProductResponseDto> {
+  ): Promise<ProductWithVariants> {
     const variants = await this.prisma.productVariant.findMany({
       where: { productId, product: notDeleted },
     });
@@ -407,7 +408,7 @@ export class ProductsService {
   async removeVariant(
     productId: number,
     variantId: number,
-  ): Promise<ProductResponseDto> {
+  ): Promise<ProductWithVariants> {
     const variant = await this.prisma.productVariant.findFirst({
       where: { id: variantId, productId, product: notDeleted },
       include: { _count: { select: { operations: true } } },

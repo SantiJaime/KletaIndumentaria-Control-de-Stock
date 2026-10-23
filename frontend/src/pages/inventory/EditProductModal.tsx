@@ -228,7 +228,7 @@ export function EditProductModal({ product, onClose, onChanged }: EditProductMod
           initialValues={{
             barcode: current.barcode ?? '',
             name: current.name,
-            buyPrice: current.buyPrice,
+            buyPrice: current.buyPrice ?? '',
             sellPrice: current.sellPrice,
           }}
           validate={validateProduct}

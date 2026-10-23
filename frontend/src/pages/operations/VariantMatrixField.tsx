@@ -8,6 +8,8 @@ import type { ProductVariant } from '../../types'
 
 const sizePresets = [
   { label: 'XS – XL', values: ['XS', 'S', 'M', 'L', 'XL'] },
+  { label: 'S/M', values: ['S/M'] },
+  { label: 'L/XL', values: ['L/XL'] },
   { label: '36 – 46', values: ['36', '38', '40', '42', '44', '46'] },
   { label: 'Único', values: ['Único'] },
 ]

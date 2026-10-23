@@ -1,7 +1,7 @@
 import type { ProductVariant } from '../types'
 
-/** Orden habitual de talles en letras; los numéricos se ordenan de menor a mayor. */
-const LETTER_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL']
+/** Orden habitual de talles en letras (los dobles, como S/M, entre sus dos talles); los numéricos se ordenan de menor a mayor. */
+const LETTER_SIZES = ['XXS', 'XS', 'S', 'S/M', 'M', 'L', 'L/XL', 'XL', 'XXL', 'XXXL']
 
 function sizeRank(size: string): number {
   const letter = LETTER_SIZES.indexOf(size.toUpperCase())
