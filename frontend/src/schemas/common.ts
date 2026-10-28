@@ -10,3 +10,6 @@ export function requiredNumber(requiredMessage: string) {
     z.number({ error: requiredMessage }),
   )
 }
+
+/** Largo máximo de la descripción (igual que en el backend). */
+export const DESCRIPTION_MAX_LENGTH = 500

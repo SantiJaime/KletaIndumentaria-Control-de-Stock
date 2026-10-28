@@ -33,8 +33,9 @@ lerna-debug.log*
 *.dump
 *.sql.gz
 
-# Archivos subidos en desarrollo
-uploads
+# Archivos subidos en desarrollo (solo en la raíz y en backend/: `backend/src/uploads/` es código)
+/uploads/
+/backend/uploads/
 
 # Certificados y claves (ej. certificados de ARCA)
 *.pem

@@ -11,6 +11,7 @@ import { Role, type FullProduct } from '../../types'
 import { zodValidate } from '../../lib/zodFormik'
 import { barcodeSchema, type BarcodeValues } from '../../schemas/barcodeSchema'
 import { ExistingProductPanel } from './ExistingProductPanel'
+import { LinkBarcodeModal } from './LinkBarcodeModal'
 import { NewProductPanel } from './NewProductPanel'
 
 interface SearchState {
@@ -31,9 +32,12 @@ export function OperationsPage() {
   const [submittedTerm, setSubmittedTerm] = useState<string | null>(null)
   // El admin pidió el formulario de alta: con el botón "Nuevo producto" o al confirmar el cartel de código inexistente.
   const [isCreating, setIsCreating] = useState(false)
+  // El admin eligió agregar el código no encontrado a un producto existente (buscador + confirmación).
+  const [isLinking, setIsLinking] = useState(false)
 
   const runSearch = async (code: string) => {
     setIsCreating(false)
+    setIsLinking(false)
     setSearch((prev) => ({ code, id: (prev?.id ?? 0) + 1 }))
     const result = await searchByBarcode(code)
     if (result.status === 'found') showToast('Producto encontrado en base de datos')
@@ -56,6 +60,7 @@ export function OperationsPage() {
   const dismissNotFound = () => {
     reset()
     setIsCreating(false)
+    setIsLinking(false)
     setSearch(null)
   }
 
@@ -85,9 +90,16 @@ export function OperationsPage() {
   const pickSuggestion = (picked: FullProduct) => {
     setIsCreating(false)
     setSubmittedTerm(term)
-    setSearch((prev) => ({ code: picked.barcode ?? '', id: (prev?.id ?? 0) + 1 }))
+    setSearch((prev) => ({ code: picked.barcodes[0] ?? '', id: (prev?.id ?? 0) + 1 }))
     selectProduct(picked)
     showToast('Producto encontrado en base de datos')
+  }
+
+  // El código quedó vinculado a un producto existente: se muestra ese producto para operar.
+  const handleLinked = (linked: FullProduct) => {
+    setIsLinking(false)
+    selectProduct(linked)
+    showToast(`Código vinculado a ${linked.name}`)
   }
 
   // El formulario de alta está a la vista (solo admin): lo abrió el botón o el "Sí" del cartel.
@@ -160,7 +172,7 @@ export function OperationsPage() {
         {suggestions.results &&
           (suggestions.results.length === 0 ? (
             <p className="mt-3 text-xs text-gray-400">
-              No se encontraron productos.{canCreateProducts && ' Si es un código nuevo, apretá Enter para darlo de alta.'}
+              No se encontraron productos.{canCreateProducts && ' Si es un código nuevo, apretá Enter para darlo de alta o agregarlo a un producto.'}
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100">
@@ -172,7 +184,7 @@ export function OperationsPage() {
                     className="flex w-full items-center justify-between px-4 py-2 text-left text-sm transition hover:bg-kleta-bg"
                   >
                     <span className="font-semibold text-kleta-plum">{p.name}</span>
-                    <span className="font-mono text-xs text-kleta-light-plum">{p.barcode ?? 'Sin código'}</span>
+                    <span className="font-mono text-xs text-kleta-light-plum">{p.barcodes.join(', ') || 'Sin código'}</span>
                   </button>
                 </li>
               ))}
@@ -225,7 +237,7 @@ export function OperationsPage() {
 
       {search && (
         <Modal
-          open={status === 'not-found' && canCreateProducts && !isCreating}
+          open={status === 'not-found' && canCreateProducts && !isCreating && !isLinking}
           onClose={dismissNotFound}
           title="Producto no encontrado"
           icon="fa-solid fa-circle-question"
@@ -233,27 +245,47 @@ export function OperationsPage() {
           <div className="space-y-5">
             <p className="text-sm text-gray-600">
               No existe ningún producto con el código{' '}
-              <strong className="font-mono text-kleta-plum">{search.code}</strong>. ¿Querés crearlo?
+              <strong className="font-mono text-kleta-plum">{search.code}</strong>. ¿Querés agregar este código a un
+              producto existente o crear un producto nuevo?
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={dismissNotFound}
                 className="rounded-xl px-5 py-2.5 text-sm font-semibold text-gray-500 transition hover:bg-gray-100"
               >
-                No
+                Cancelar
               </button>
               <button
                 type="button"
                 autoFocus
+                onClick={() => setIsLinking(true)}
+                className="rounded-xl border-2 border-kleta-sage px-5 py-2.5 text-sm font-bold text-kleta-sage transition hover:bg-kleta-sage hover:text-white"
+              >
+                <i className="fa-solid fa-link mr-1.5" />
+                Agregar a un producto existente
+              </button>
+              <button
+                type="button"
                 onClick={() => setIsCreating(true)}
                 className="rounded-xl bg-kleta-sage px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-kleta-light-sage"
               >
-                Sí, crear producto
+                <i className="fa-solid fa-plus mr-1.5" />
+                Crear producto nuevo
               </button>
             </div>
           </div>
         </Modal>
+      )}
+
+      {search && status === 'not-found' && canCreateProducts && isLinking && (
+        <LinkBarcodeModal
+          key={search.id}
+          code={search.code}
+          onBack={() => setIsLinking(false)}
+          onClose={dismissNotFound}
+          onLinked={handleLinked}
+        />
       )}
 
       {search && status === 'not-found' && !canCreateProducts && (

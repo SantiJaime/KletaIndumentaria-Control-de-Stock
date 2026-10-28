@@ -9,6 +9,7 @@ import { OperationType } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOperationDto } from './dto/create-operation.dto.js';
 import { ProductsService } from '../products/products.service.js';
+import { productInclude } from '../products/dto/product-response.dto.js';
 import {
   operationInclude,
   OperationResponseDto,
@@ -178,7 +179,7 @@ export class OperationsService {
 
       const product = await tx.product.findUniqueOrThrow({
         where: { id: variant.productId },
-        include: { variants: { orderBy: { id: 'asc' } } },
+        include: productInclude,
       });
 
       return {

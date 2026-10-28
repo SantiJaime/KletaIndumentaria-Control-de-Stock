@@ -10,12 +10,15 @@ import {
   HttpStatus,
   ParseIntPipe,
   Query,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { AccessTokenPayload } from '../auth/auth.types.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { Role } from '../generated/prisma/enums.js';
 import { PAGE_SIZE, ProductsService } from './products.service.js';
+import { AddBarcodeDto } from './dto/add-barcode.dto.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { CreateVariantsDto } from './dto/create-variants.dto.js';
 import { PaginatedProductsResponseDto } from './dto/paginated-products-response.dto.js';
@@ -29,6 +32,7 @@ import { SearchProductsQueryDto } from './dto/search-products-query.dto.js';
 import { SanitizeBarcodePipe } from './pipes/sanitize-barcode.pipe.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { UpdateVariantsDto } from './dto/update-variants.dto.js';
+import { ImageUploadInterceptor } from '../uploads/image-upload.interceptor.js';
 
 // El service devuelve los productos de Prisma y acá se arma la respuesta: las lecturas usan `productResponseFor`
 // (el precio de compra solo lo ve el admin) y las rutas de admin devuelven `AdminProductResponseDto`.
@@ -99,6 +103,18 @@ export class ProductsController {
     );
   }
 
+  // Agrega un código de barras a un producto existente y devuelve el producto actualizado.
+  @Roles(Role.admin)
+  @Post(':id/barcodes')
+  async addBarcode(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() addBarcodeDto: AddBarcodeDto,
+  ) {
+    return new AdminProductResponseDto(
+      await this.productsService.addBarcode(id, addBarcodeDto),
+    );
+  }
+
   @Roles(Role.admin)
   @Post(':id/variants')
   async addVariants(
@@ -131,6 +147,27 @@ export class ProductsController {
   ) {
     return new AdminProductResponseDto(
       await this.productsService.updateVariants(id, updateVariantsDto),
+    );
+  }
+
+  // Foto del producto: multipart/form-data con el archivo en el campo `image`. Reemplaza la anterior.
+  @Roles(Role.admin)
+  @Post(':id/image')
+  @UseInterceptors(ImageUploadInterceptor)
+  async setImage(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return new AdminProductResponseDto(
+      await this.productsService.setImage(id, file),
+    );
+  }
+
+  @Roles(Role.admin)
+  @Delete(':id/image')
+  async removeImage(@Param('id', ParseIntPipe) id: number) {
+    return new AdminProductResponseDto(
+      await this.productsService.removeImage(id),
     );
   }
 

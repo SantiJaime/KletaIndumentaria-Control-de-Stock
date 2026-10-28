@@ -63,11 +63,10 @@ model LoginAttempt {
 
 model Product {
   id          Int              @id @default(autoincrement())
-  // Compartido por todas las variantes: al escanearlo se elige talle y color. Opcional: hay productos sin código
-  // (Postgres permite varios NULL en una columna única).
-  barcode     String?          @unique
   name        String
   description String?
+  // Foto del producto en Cloudinary (URL https). Null: sin foto.
+  imageUrl    String?          @map("image_url")
   // Precios comunes a todas las variantes de la prenda.
   buyPrice    Decimal          @map("buy_price") @db.Decimal(12, 2)
   sellPrice   Decimal          @map("sell_price") @db.Decimal(12, 2)
@@ -76,12 +75,27 @@ model Product {
   // Soft delete: si tiene fecha, el producto está eliminado (se conserva por el historial de operaciones).
   deletedAt   DateTime?        @map("deleted_at")
   variants    ProductVariant[]
+  // Códigos de barras (cero o más): cualquiera de ellos encuentra el producto.
+  barcodes    ProductBarcode[]
 
   // Índice trigram: acelera la búsqueda por nombre tolerante a errores (ver ProductsService.search).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_name_trgm_idx")
   // Listado paginado (GET /products): filtra por deleted_at y ordena por nombre sin ordenar en memoria.
   @@index([deletedAt, name, id], map: "products_deleted_at_name_id_idx")
   @@map("products")
+}
+
+// Un código de barras de un producto. Compartido por todas las variantes: al escanearlo se elige talle y color.
+// Un producto puede tener varios (o ninguno), pero un código pertenece a un solo producto, incluso si está
+// eliminado (conserva sus códigos).
+model ProductBarcode {
+  id        Int     @id @default(autoincrement())
+  code      String  @unique
+  productId Int     @map("product_id")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_barcodes")
 }
 
 // Cada combinación de talle y color, con su propio stock.

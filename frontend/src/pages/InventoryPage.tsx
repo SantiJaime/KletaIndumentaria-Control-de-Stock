@@ -7,6 +7,7 @@ import { useInputSource } from '../hooks/useInputSource'
 import { useProductList } from '../hooks/useProductList'
 import { useProductSearch } from '../hooks/useProductSearch'
 import { formatMoney } from '../lib/format'
+import { imageThumbnailUrl } from '../lib/images'
 import { sortedSizes, variantLabel } from '../lib/variants'
 import { Role, type FullProduct } from '../types'
 import { DeleteProductModal } from './inventory/DeleteProductModal'
@@ -115,21 +116,51 @@ export function InventoryPage() {
             return (
               <tr key={p.id} className="transition hover:bg-kleta-bg/50">
                 <td className="px-6 py-3.5 font-mono font-bold text-kleta-light-plum">
-                  {p.barcode ?? <span className="font-sans font-normal text-gray-300">Sin código</span>}
+                  {p.barcodes.length > 0 ? (
+                    p.barcodes.map((code) => (
+                      <span key={code} className="block">
+                        {code}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="font-sans font-normal text-gray-300">Sin código</span>
+                  )}
                 </td>
                 <td className="px-6 py-3.5">
-                  <span className="font-semibold text-kleta-plum">{p.name}</span>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {variants.map((v) => (
-                      <span
-                        key={v.id}
-                        className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                          v.stock === 0 ? 'bg-gray-100 text-gray-400 line-through' : 'bg-kleta-bg text-gray-600'
-                        }`}
+                  <div className="flex items-start gap-3">
+                    {p.imageUrl ? (
+                      // Al tocarla se abre la foto completa en otra pestaña.
+                      <a href={p.imageUrl} target="_blank" rel="noreferrer" className="shrink-0" title="Ver foto">
+                        <img
+                          src={imageThumbnailUrl(p.imageUrl, 96)}
+                          alt={p.name}
+                          loading="lazy"
+                          className="h-12 w-12 rounded-lg border border-gray-200 object-cover transition hover:opacity-80"
+                        />
+                      </a>
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-kleta-bg"
                       >
-                        {variantLabel(v)}: {v.stock}
-                      </span>
-                    ))}
+                        <i className="fa-solid fa-image text-gray-300" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <span className="font-semibold text-kleta-plum">{p.name}</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {variants.map((v) => (
+                          <span
+                            key={v.id}
+                            className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                              v.stock === 0 ? 'bg-gray-100 text-gray-400 line-through' : 'bg-kleta-bg text-gray-600'
+                            }`}
+                          >
+                            {variantLabel(v)}: {v.stock}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 {canManage && (
