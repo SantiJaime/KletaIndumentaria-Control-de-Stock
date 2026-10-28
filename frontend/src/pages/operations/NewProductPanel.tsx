@@ -1,7 +1,7 @@
 import { Form, Formik } from 'formik'
 import { useState } from 'react'
 import { ImageField } from '../../components/ImageField'
-import { TextField } from '../../components/FormField'
+import { TextAreaField, TextField } from '../../components/FormField'
 import { TagsField } from '../../components/TagsField'
 import { NumberField } from '../../components/NumberField'
 import { useToast } from '../../context/toastContext'
@@ -9,6 +9,7 @@ import type { ActionResult, CreatedProduct } from '../../hooks/useProducts'
 import { sanitizeBarcode } from '../../lib/barcode'
 import { zodValidate } from '../../lib/zodFormik'
 import { productSchema, type ProductFormValues } from '../../schemas/productSchema'
+import { DESCRIPTION_MAX_LENGTH } from '../../schemas/common'
 import { emptyVariantMatrix } from '../../schemas/variantMatrixSchema'
 import type { NewProduct } from '../../types'
 import { VariantMatrixField } from './VariantMatrixField'
@@ -33,6 +34,7 @@ export function NewProductPanel({ barcode, onCreate }: NewProductPanelProps) {
   const initialValues: ProductFormValues = {
     barcodes: barcode ? [barcode] : [],
     name: '',
+    description: '',
     buyPrice: '',
     sellPrice: '',
     ...emptyVariantMatrix,
@@ -77,6 +79,13 @@ export function NewProductPanel({ barcode, onCreate }: NewProductPanelProps) {
             />
 
             <TextField name="name" type="text" label="Nombre del producto" placeholder="Ej: Pantalón Floral Kleta" />
+
+            <TextAreaField
+              name="description"
+              label="Descripción (opcional)"
+              placeholder="Ej: tela, calce, detalles de la prenda…"
+              maxLength={DESCRIPTION_MAX_LENGTH}
+            />
 
             <ImageField
               label="Foto del producto (opcional)"

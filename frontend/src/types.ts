@@ -32,6 +32,8 @@ export interface Product {
   /** Cero o más códigos de barras: cualquiera de ellos encuentra el producto. */
   barcodes: string[]
   name: string
+  /** Descripción opcional; `null` si no tiene. */
+  description: string | null
   buyPrice: number
   sellPrice: number
   variants: ProductVariant[]
@@ -49,6 +51,8 @@ export type NewProduct = Omit<Product, 'variants'> & {
 export interface UpdateProductInput {
   barcodes: string[]
   name: string
+  /** `null` borra la descripción. */
+  description: string | null
   buyPrice: number
   sellPrice: number
 }
@@ -69,7 +73,6 @@ export interface FullProduct extends Omit<Product, 'buyPrice'> {
   id: number
   /** La API solo lo envía al admin. */
   buyPrice?: number
-  description: string | null
   /** Foto del producto (Cloudinary); `null` si no tiene. */
   imageUrl: string | null
   totalStock: number

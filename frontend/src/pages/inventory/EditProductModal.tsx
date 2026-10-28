@@ -1,6 +1,6 @@
 import { Form, Formik, useFormik } from 'formik'
 import { useState } from 'react'
-import { TextField } from '../../components/FormField'
+import { TextAreaField, TextField } from '../../components/FormField'
 import { ImageField } from '../../components/ImageField'
 import { TagsField } from '../../components/TagsField'
 import { NumberField } from '../../components/NumberField'
@@ -18,6 +18,7 @@ import {
   type EditVariantFormValue,
   type EditVariantsFormValues,
 } from '../../schemas/editProductSchema'
+import { DESCRIPTION_MAX_LENGTH } from '../../schemas/common'
 import type { FullProduct, ProductVariant } from '../../types'
 
 const validateProduct = zodValidate<EditProductFormValues>(editProductSchema)
@@ -261,6 +262,7 @@ export function EditProductModal({ product, onClose, onChanged }: EditProductMod
             initialValues={{
               barcodes: current.barcodes,
               name: current.name,
+              description: current.description ?? '',
               buyPrice: current.buyPrice ?? '',
               sellPrice: current.sellPrice,
             }}
@@ -287,6 +289,12 @@ export function EditProductModal({ product, onClose, onChanged }: EditProductMod
                   mono
                 />
                 <TextField name="name" type="text" label="Nombre del producto" />
+                <TextAreaField
+                  name="description"
+                  label="Descripción (opcional)"
+                  placeholder="Ej: tela, calce, detalles de la prenda…"
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                />
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                   <NumberField name="buyPrice" decimalScale={2} label="Precio al comprar ($)" />
                   <NumberField name="sellPrice" decimalScale={2} label="Precio al vender ($)" />

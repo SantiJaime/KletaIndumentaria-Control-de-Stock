@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { barcodeList } from './barcodeSchema'
 import { variantKey } from '../lib/variants'
-import { requiredNumber, type NumberInputValue } from './common'
+import { DESCRIPTION_MAX_LENGTH, requiredNumber, type NumberInputValue } from './common'
 
 const price = (label: string) =>
   requiredNumber(`Ingresá el precio ${label}`).pipe(z.number().positive('El precio debe ser mayor a 0'))
@@ -15,6 +15,12 @@ export const editProductSchema = z
       .trim()
       .min(1, 'Ingresá el nombre del producto')
       .max(80, 'El nombre no puede superar los 80 caracteres'),
+    description: z
+      .string()
+      .trim()
+      .max(DESCRIPTION_MAX_LENGTH, `La descripción no puede superar los ${DESCRIPTION_MAX_LENGTH} caracteres`)
+      // Opcional: vacía queda en `null` (sin descripción).
+      .transform((value) => value || null),
     buyPrice: price('de compra'),
     sellPrice: price('de venta'),
   })
@@ -26,6 +32,7 @@ export const editProductSchema = z
 export interface EditProductFormValues {
   barcodes: string[]
   name: string
+  description: string
   buyPrice: NumberInputValue
   sellPrice: NumberInputValue
 }
