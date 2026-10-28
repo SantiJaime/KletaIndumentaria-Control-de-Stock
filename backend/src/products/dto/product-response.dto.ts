@@ -2,27 +2,36 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { ProductVariantResponseDto } from './product-variant-response.dto.js';
 
-// Lo que devuelve Prisma al buscar un producto incluyendo sus variantes.
+// Relaciones que hay que traer para armar la respuesta: variantes y códigos de barras, en el orden en que se cargaron.
+export const productInclude = {
+  variants: { orderBy: { id: 'asc' } },
+  barcodes: { orderBy: { id: 'asc' }, select: { code: true } },
+} satisfies Prisma.ProductInclude;
+
+// Lo que devuelve Prisma al buscar un producto con `productInclude`.
 export type ProductWithVariants = Prisma.ProductGetPayload<{
-  include: { variants: true };
+  include: typeof productInclude;
 }>;
 
 // Forma en que la API devuelve un producto: precios como number y stock total calculado. No incluye el precio de
 // compra: solo lo ve el admin (`AdminProductResponseDto`).
 export class ProductResponseDto {
   id: number;
-  barcode: string | null;
+  barcodes: string[];
   name: string;
   description: string | null;
+  /** Foto en Cloudinary; `null` si no tiene. */
+  imageUrl: string | null;
   sellPrice: number;
   totalStock: number;
   variants: ProductVariantResponseDto[];
 
   constructor(product: ProductWithVariants) {
     this.id = product.id;
-    this.barcode = product.barcode;
+    this.barcodes = product.barcodes.map(({ code }) => code);
     this.name = product.name;
     this.description = product.description;
+    this.imageUrl = product.imageUrl;
     // Decimal -> number: en JSON un Decimal se serializa como string.
     this.sellPrice = product.sellPrice.toNumber();
     this.variants = product.variants.map(

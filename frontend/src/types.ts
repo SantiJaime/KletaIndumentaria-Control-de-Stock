@@ -27,10 +27,10 @@ export interface ProductVariant {
   stock: number
 }
 
-/** Prenda. El código de barras y los precios son comunes a todas sus variantes. */
+/** Prenda. Los códigos de barras y los precios son comunes a todas sus variantes. */
 export interface Product {
-  /** `null`: producto sin código de barras. */
-  barcode: string | null
+  /** Cero o más códigos de barras: cualquiera de ellos encuentra el producto. */
+  barcodes: string[]
   name: string
   buyPrice: number
   sellPrice: number
@@ -45,9 +45,9 @@ export type NewProduct = Omit<Product, 'variants'> & {
   variants: NewVariant[]
 }
 
-/** Campos a cambiar de un producto (PATCH /products/:id). `barcode: null` le quita el código. */
+/** Campos a cambiar de un producto (PATCH /products/:id). `barcodes` reemplaza todos sus códigos (`[]` los quita). */
 export interface UpdateProductInput {
-  barcode: string | null
+  barcodes: string[]
   name: string
   buyPrice: number
   sellPrice: number
@@ -70,6 +70,8 @@ export interface FullProduct extends Omit<Product, 'buyPrice'> {
   /** La API solo lo envía al admin. */
   buyPrice?: number
   description: string | null
+  /** Foto del producto (Cloudinary); `null` si no tiene. */
+  imageUrl: string | null
   totalStock: number
 }
 
@@ -93,7 +95,7 @@ export interface ApiOperation {
   size: string
   color: string
   productId: number
-  barcode: string | null
+  barcodes: string[]
   name: string
   /** Usuario que la registró; `null` en las operaciones viejas, de antes de guardarlo. */
   username: string | null

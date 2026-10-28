@@ -1,30 +1,34 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
-  Matches,
   Max,
   MaxLength,
 } from 'class-validator';
-import { sanitizeBarcode } from '../barcode.util.js';
+import { MAX_BARCODES, sanitizeBarcodes } from '../barcode.util.js';
 import { CreateVariantsDto } from './create-variants.dto.js';
 
 // Hereda `variants` (con sus validaciones) de CreateVariantsDto.
 export class CreateProductDto extends CreateVariantsDto {
-  // Opcional: hay productos sin código de barras. Se limpia antes de validar ("C-123 45!" queda
-  // "C12345") y si no queda nada se trata como si no se hubiera enviado.
+  // Opcional: hay productos sin código de barras y otros con varios. Cada código se limpia antes de validar
+  // ("C-123 45!" queda "C12345"); los vacíos y los repetidos se descartan.
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? sanitizeBarcode(value) || undefined : value,
-  )
-  @IsString({ message: 'El código de barras debe ser un texto' })
-  @Matches(/^[A-Za-z0-9]+$/, {
-    message: 'El código sólo puede contener letras y números',
+  @Transform(({ value }: { value: unknown }) => sanitizeBarcodes(value))
+  @IsArray({ message: 'Los códigos de barras deben ser una lista' })
+  @ArrayMaxSize(MAX_BARCODES, {
+    message: `Un producto puede tener hasta ${MAX_BARCODES} códigos de barras`,
   })
-  barcode?: string;
+  @IsString({ each: true, message: 'Cada código de barras debe ser un texto' })
+  @MaxLength(50, {
+    each: true,
+    message: 'Cada código puede tener hasta 50 caracteres',
+  })
+  barcodes?: string[];
 
   @IsString({ message: 'El nombre debe ser un texto' })
   @IsNotEmpty({ message: 'El nombre del producto es obligatorio' })

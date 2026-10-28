@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { sanitizeBarcode } from '../lib/barcode'
+import { barcodeList } from './barcodeSchema'
 import { variantKey } from '../lib/variants'
 import { requiredNumber, type NumberInputValue } from './common'
 
@@ -8,8 +8,8 @@ const price = (label: string) =>
 
 export const editProductSchema = z
   .object({
-    // Opcional: sin letras ni números queda en `null` (se le quita el código al producto).
-    barcode: z.string().transform((value) => sanitizeBarcode(value) || null),
+    // Opcional: puede no tener ninguno o tener varios.
+    barcodes: barcodeList,
     name: z
       .string()
       .trim()
@@ -24,7 +24,7 @@ export const editProductSchema = z
   })
 
 export interface EditProductFormValues {
-  barcode: string
+  barcodes: string[]
   name: string
   buyPrice: NumberInputValue
   sellPrice: NumberInputValue

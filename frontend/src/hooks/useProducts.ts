@@ -20,6 +20,12 @@ export type SearchResult =
   | { status: 'error'; error: string }
   | { status: 'stale' }
 
+/** Producto recién creado; `imageError` explica por qué no se pudo subir la foto elegida. */
+export interface CreatedProduct {
+  product: FullProduct
+  imageError: string | null
+}
+
 /** Resultado de una acción de escritura: los datos, o el mensaje de error para mostrar. */
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -86,13 +92,25 @@ export function useProducts() {
     }
   }, [])
 
+  /**
+   * Da de alta el producto y, si se eligió, sube su foto. Si el alta sale bien pero la foto no, el producto queda
+   * creado igual y el motivo vuelve en `imageError` (se puede subir después desde Inventario).
+   */
   const createProduct = useCallback(
-    (newProduct: NewProduct) =>
-      run(async () => {
-        const created = await productsApi.createProduct(newProduct)
+    (newProduct: NewProduct, image: File | null = null) =>
+      run(async (): Promise<CreatedProduct> => {
+        let created = await productsApi.createProduct(newProduct)
+        let imageError: string | null = null
+        if (image) {
+          try {
+            created = await productsApi.uploadProductImage(created.id, image)
+          } catch (err) {
+            imageError = getApiErrorMessage(err)
+          }
+        }
         setProduct(created)
         setStatus('found')
-        return created
+        return { product: created, imageError }
       }),
     [run],
   )

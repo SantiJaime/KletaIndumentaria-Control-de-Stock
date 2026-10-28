@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { sanitizeBarcode } from '../lib/barcode'
+import { barcodeList } from './barcodeSchema'
 import { requiredNumber, type NumberInputValue } from './common'
 import {
   matrixToVariants,
@@ -14,8 +14,8 @@ const price = (label: string) =>
 
 export const productSchema = z
   .object({
-    // Opcional: sin letras ni números queda en `null` (producto sin código de barras).
-    barcode: z.string().transform((value) => sanitizeBarcode(value) || null),
+    // Opcional: puede no tener ninguno o tener varios.
+    barcodes: barcodeList,
     name: z
       .string()
       .trim()
@@ -40,7 +40,7 @@ export const productSchema = z
 export type ProductOutput = z.output<typeof productSchema>
 
 export interface ProductFormValues extends VariantMatrixValues {
-  barcode: string
+  barcodes: string[]
   name: string
   buyPrice: NumberInputValue
   sellPrice: NumberInputValue

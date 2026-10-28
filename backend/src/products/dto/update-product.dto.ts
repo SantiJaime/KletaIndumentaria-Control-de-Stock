@@ -1,28 +1,34 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
-  Matches,
   Max,
   MaxLength,
 } from 'class-validator';
-import { sanitizeBarcode } from '../barcode.util.js';
+import { MAX_BARCODES, sanitizeBarcodes } from '../barcode.util.js';
 
 // Todos los campos son opcionales: solo se cambia lo que se envía. Las variantes se editan por separado.
 export class UpdateProductDto {
-  // Se limpia como al crear. Un texto sin letras ni números (o `null`) le quita el código al producto.
+  // Reemplaza todos los códigos del producto (se limpian como al crear). `[]` o `null` le quitan todos.
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? sanitizeBarcode(value) || null : value,
+    value === null ? [] : sanitizeBarcodes(value),
   )
-  @IsString({ message: 'El código de barras debe ser un texto' })
-  @Matches(/^[A-Za-z0-9]+$/, {
-    message: 'El código sólo puede contener letras y números',
+  @IsArray({ message: 'Los códigos de barras deben ser una lista' })
+  @ArrayMaxSize(MAX_BARCODES, {
+    message: `Un producto puede tener hasta ${MAX_BARCODES} códigos de barras`,
   })
-  barcode?: string | null;
+  @IsString({ each: true, message: 'Cada código de barras debe ser un texto' })
+  @MaxLength(50, {
+    each: true,
+    message: 'Cada código puede tener hasta 50 caracteres',
+  })
+  barcodes?: string[];
 
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>

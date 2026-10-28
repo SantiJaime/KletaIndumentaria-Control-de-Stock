@@ -2,7 +2,15 @@ import type { OperationType, Prisma } from '../../generated/prisma/client.js';
 
 // Relaciones que hay que traer para armar la respuesta: variante y producto, quién la registró y quién la anuló.
 export const operationInclude = {
-  variant: { include: { product: true } },
+  variant: {
+    include: {
+      product: {
+        include: {
+          barcodes: { orderBy: { id: 'asc' }, select: { code: true } },
+        },
+      },
+    },
+  },
   user: { select: { username: true } },
   cancelledBy: { select: { username: true } },
 } satisfies Prisma.OperationInclude;
@@ -24,7 +32,7 @@ export class OperationResponseDto {
   size: string;
   color: string;
   productId: number;
-  barcode: string | null;
+  barcodes: string[];
   name: string;
   /** Usuario que la registró; `null` en las operaciones viejas, de antes de guardarlo. */
   username: string | null;
@@ -45,7 +53,7 @@ export class OperationResponseDto {
     this.size = variant.size;
     this.color = variant.color;
     this.productId = variant.product.id;
-    this.barcode = variant.product.barcode;
+    this.barcodes = variant.product.barcodes.map(({ code }) => code);
     this.name = variant.product.name;
     this.username = operation.user?.username ?? null;
     this.cancelledAt = operation.cancelledAt?.toISOString() ?? null;

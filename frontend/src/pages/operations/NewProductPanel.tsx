@@ -1,13 +1,16 @@
 import { Form, Formik } from 'formik'
+import { useState } from 'react'
+import { ImageField } from '../../components/ImageField'
 import { TextField } from '../../components/FormField'
+import { TagsField } from '../../components/TagsField'
 import { NumberField } from '../../components/NumberField'
 import { useToast } from '../../context/toastContext'
-import type { ActionResult } from '../../hooks/useProducts'
+import type { ActionResult, CreatedProduct } from '../../hooks/useProducts'
 import { sanitizeBarcode } from '../../lib/barcode'
 import { zodValidate } from '../../lib/zodFormik'
 import { productSchema, type ProductFormValues } from '../../schemas/productSchema'
 import { emptyVariantMatrix } from '../../schemas/variantMatrixSchema'
-import type { FullProduct, NewProduct } from '../../types'
+import type { NewProduct } from '../../types'
 import { VariantMatrixField } from './VariantMatrixField'
 
 /** Margen sugerido sobre el precio de compra. */
@@ -16,17 +19,19 @@ const SUGGESTED_MARGIN = 1.6
 const validate = zodValidate<ProductFormValues>(productSchema)
 
 interface NewProductPanelProps {
-  /** Código buscado; se puede corregir o quitar en el formulario. */
+  /** Código buscado (o `''`); se puede corregir o quitar y agregar otros en el formulario. */
   barcode: string
-  /** Da de alta el producto en la API. */
-  onCreate: (product: NewProduct) => Promise<ActionResult<FullProduct>>
+  /** Da de alta el producto en la API (y sube la foto, si se eligió una). */
+  onCreate: (product: NewProduct, image: File | null) => Promise<ActionResult<CreatedProduct>>
 }
 
 export function NewProductPanel({ barcode, onCreate }: NewProductPanelProps) {
   const showToast = useToast()
+  // La foto se sube después del alta (hace falta el id del producto).
+  const [image, setImage] = useState<File | null>(null)
 
   const initialValues: ProductFormValues = {
-    barcode,
+    barcodes: barcode ? [barcode] : [],
     name: '',
     buyPrice: '',
     sellPrice: '',
@@ -52,36 +57,35 @@ export function NewProductPanel({ barcode, onCreate }: NewProductPanelProps) {
         validate={validate}
         onSubmit={async (values) => {
           // Al crearse, el producto pasa a existir y la página muestra el panel de operación.
-          const result = await onCreate(productSchema.parse(values))
-          showToast(result.ok ? '¡Nuevo producto cargado con éxito!' : result.error)
+          const result = await onCreate(productSchema.parse(values), image)
+          if (!result.ok) showToast(result.error)
+          else if (result.data.imageError) {
+            showToast(`Producto cargado, pero no se pudo subir la foto: ${result.data.imageError}`)
+          } else showToast('¡Nuevo producto cargado con éxito!')
         }}
       >
-        {({ setFieldValue, isSubmitting, values }) => (
+        {({ setFieldValue, isSubmitting }) => (
           <Form noValidate className="space-y-5">
-            <TextField
-              name="barcode"
-              type="text"
-              autoComplete="off"
-              label="Código de barras del producto (opcional)"
-              placeholder="Sin código de barras"
+            <TagsField
+              name="barcodes"
+              label="Códigos de barras (opcional)"
+              placeholder="Sin códigos (escaneá o escribí y Enter para agregar)"
+              maxLength={50}
               // Solo letras y números: lo demás se descarta al escribir (o pegar).
-              onChange={(e) => void setFieldValue('barcode', sanitizeBarcode(e.target.value))}
-              inputClassName="p-3.5 pr-24 bg-kleta-bg font-mono font-bold text-kleta-light-plum"
-              adornment={
-                values.barcode && (
-                  <button
-                    type="button"
-                    onClick={() => void setFieldValue('barcode', '')}
-                    className="absolute top-1/2 right-3 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition hover:bg-red-50"
-                  >
-                    <i className="fa-solid fa-xmark mr-1" />
-                    Quitar
-                  </button>
-                )
-              }
+              sanitize={sanitizeBarcode}
+              mono
             />
 
             <TextField name="name" type="text" label="Nombre del producto" placeholder="Ej: Pantalón Floral Kleta" />
+
+            <ImageField
+              label="Foto del producto (opcional)"
+              value={image}
+              onSelect={setImage}
+              onRemove={() => setImage(null)}
+              busy={isSubmitting}
+              hint="JPG, PNG o WEBP; después de elegirla podés recortarla. Se sube al cargar el producto."
+            />
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <NumberField

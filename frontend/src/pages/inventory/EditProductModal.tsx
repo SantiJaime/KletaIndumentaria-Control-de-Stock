@@ -1,6 +1,8 @@
 import { Form, Formik, useFormik } from 'formik'
 import { useState } from 'react'
 import { TextField } from '../../components/FormField'
+import { ImageField } from '../../components/ImageField'
+import { TagsField } from '../../components/TagsField'
 import { NumberField } from '../../components/NumberField'
 import { NumberInput } from '../../components/NumberInput'
 import { Modal } from '../../components/Modal'
@@ -221,77 +223,96 @@ export function EditProductModal({ product, onClose, onChanged }: EditProductMod
     onChanged()
   }
 
+  // La foto se guarda apenas se elige o se quita (no espera al botón "Guardar").
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const changeImage = async (action: () => Promise<FullProduct>, message: string) => {
+    setImageBusy(true)
+    setImageError(null)
+    try {
+      handleProductChange(await action())
+      showToast(message)
+    } catch (err) {
+      setImageError(getApiErrorMessage(err))
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
   return (
-    <Modal open onClose={onClose} title="Editar producto" icon="fa-solid fa-pen" wide>
+    <Modal open onClose={onClose} title="Editar producto" icon="fa-solid fa-pen" size="xl">
       <div className="space-y-8">
-        <Formik<EditProductFormValues>
-          initialValues={{
-            barcode: current.barcode ?? '',
-            name: current.name,
-            buyPrice: current.buyPrice ?? '',
-            sellPrice: current.sellPrice,
-          }}
-          validate={validateProduct}
-          onSubmit={async (values, { setStatus }) => {
-            setStatus(undefined)
-            try {
-              handleProductChange(await productsApi.updateProduct(current.id, editProductSchema.parse(values)))
-              showToast('Producto actualizado')
-            } catch (err) {
-              setStatus(getApiErrorMessage(err))
+        {/* Foto a la izquierda y datos del producto a la derecha (en móvil, uno abajo del otro). */}
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,18rem)_1fr]">
+          <ImageField
+            label="Foto del producto"
+            value={current.imageUrl}
+            busy={imageBusy}
+            error={imageError}
+            onSelect={(file) =>
+              void changeImage(() => productsApi.uploadProductImage(current.id, file), 'Foto actualizada')
             }
-          }}
-        >
-          {({ isSubmitting, status, values, setFieldValue, dirty }) => (
-            <Form noValidate className="space-y-5">
-              <TextField
-                name="barcode"
-                type="text"
-                autoComplete="off"
-                label="Código de barras (opcional)"
-                placeholder="Sin código de barras"
-                // Solo letras y números: lo demás se descarta al escribir (o pegar).
-                onChange={(e) => void setFieldValue('barcode', sanitizeBarcode(e.target.value))}
-                inputClassName="p-3.5 pr-24 bg-kleta-bg font-mono font-bold text-kleta-light-plum"
-                adornment={
-                  values.barcode && (
-                    <button
-                      type="button"
-                      onClick={() => void setFieldValue('barcode', '')}
-                      className="absolute top-1/2 right-3 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition hover:bg-red-50"
-                    >
-                      <i className="fa-solid fa-xmark mr-1" />
-                      Quitar
-                    </button>
-                  )
-                }
-              />
-              <TextField name="name" type="text" label="Nombre del producto" />
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <NumberField name="buyPrice" decimalScale={2} label="Precio al comprar ($)" />
-                <NumberField name="sellPrice" decimalScale={2} label="Precio al vender ($)" />
-              </div>
+            onRemove={() => void changeImage(() => productsApi.deleteProductImage(current.id), 'Foto eliminada')}
+            hint="JPG, PNG o WEBP; después de elegirla podés recortarla. Se guarda al confirmar el recorte."
+            layout="stacked"
+          />
 
-              {status && (
-                <p role="alert" className="flex items-center gap-1.5 text-xs font-medium text-red-500">
-                  <i className="fa-solid fa-circle-exclamation" />
-                  {status}
-                </p>
-              )}
+          <Formik<EditProductFormValues>
+            initialValues={{
+              barcodes: current.barcodes,
+              name: current.name,
+              buyPrice: current.buyPrice ?? '',
+              sellPrice: current.sellPrice,
+            }}
+            validate={validateProduct}
+            onSubmit={async (values, { setStatus }) => {
+              setStatus(undefined)
+              try {
+                handleProductChange(await productsApi.updateProduct(current.id, editProductSchema.parse(values)))
+                showToast('Producto actualizado')
+              } catch (err) {
+                setStatus(getApiErrorMessage(err))
+              }
+            }}
+          >
+            {({ isSubmitting, status, dirty }) => (
+              <Form noValidate className="space-y-5">
+                <TagsField
+                  name="barcodes"
+                  label="Códigos de barras (opcional)"
+                  placeholder="Sin códigos (escaneá o escribí y Enter para agregar)"
+                  maxLength={50}
+                  // Solo letras y números: lo demás se descarta al escribir (o pegar).
+                  sanitize={sanitizeBarcode}
+                  mono
+                />
+                <TextField name="name" type="text" label="Nombre del producto" />
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <NumberField name="buyPrice" decimalScale={2} label="Precio al comprar ($)" />
+                  <NumberField name="sellPrice" decimalScale={2} label="Precio al vender ($)" />
+                </div>
 
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !dirty}
-                  className="flex items-center gap-2 rounded-xl bg-kleta-sage px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-kleta-light-sage disabled:opacity-40"
-                >
-                  <i className={isSubmitting ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-floppy-disk'} />
-                  Guardar producto
-                </button>
-              </div>
-            </Form>
-          )}
-        </Formik>
+                {status && (
+                  <p role="alert" className="flex items-center gap-1.5 text-xs font-medium text-red-500">
+                    <i className="fa-solid fa-circle-exclamation" />
+                    {status}
+                  </p>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !dirty}
+                    className="flex items-center gap-2 rounded-xl bg-kleta-sage px-6 py-3 text-sm font-bold text-white shadow-md transition hover:bg-kleta-light-sage disabled:opacity-40"
+                  >
+                    <i className={isSubmitting ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-floppy-disk'} />
+                    Guardar producto
+                  </button>
+                </div>
+              </Form>
+            )}
+          </Formik>
+        </div>
 
         <section>
           <h4 className="mb-3 border-t border-gray-100 pt-6 text-xs font-bold tracking-wider text-kleta-plum uppercase">
