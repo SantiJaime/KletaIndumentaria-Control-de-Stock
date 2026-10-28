@@ -5,13 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
+import { CloudinaryService } from '../cloudinary/cloudinary.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { CreateVariantsDto } from './dto/create-variants.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { UpdateVariantsDto } from './dto/update-variants.dto.js';
-import { sanitizeBarcode } from './barcode.util.js';
-import type { ProductWithVariants } from './dto/product-response.dto.js';
+import { MAX_BARCODES, sanitizeBarcode } from './barcode.util.js';
+import { AddBarcodeDto } from './dto/add-barcode.dto.js';
+import {
+  productInclude,
+  type ProductWithVariants,
+} from './dto/product-response.dto.js';
 
 // Clave de una combinación sin distinguir mayúsculas: en la DB la restricción única sí las distingue.
 const variantKey = (v: { size: string; color: string }) =>
@@ -25,11 +30,6 @@ const conflictError = (labels: string[]) =>
     message: `Ya existen las variantes: ${labels.join(', ')}`,
     conflicts: labels,
   });
-
-// Variantes ordenadas por id, para incluir al devolver un producto.
-const withVariants = {
-  variants: { orderBy: { id: 'asc' } },
-} satisfies Prisma.ProductInclude;
 
 // Los productos eliminados (soft delete) no se ven en ninguna búsqueda.
 const notDeleted = { deletedAt: null } satisfies Prisma.ProductWhereInput;
@@ -50,9 +50,16 @@ const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
   error.code === 'P2002';
 
+// Sin distinguir mayúsculas, igual que la búsqueda del frontend (en la DB la restricción única sí las distingue).
+const codeEquals = (code: string) =>
+  ({ equals: code, mode: 'insensitive' }) satisfies Prisma.StringFilter;
+
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
+  ) {}
 
   async create({
     variants,
@@ -64,27 +71,14 @@ export class ProductsService {
       );
     }
 
-    const { barcode } = data;
-    if (barcode) {
-      // Incluye los eliminados: conservan su código de barras (es único en la DB).
-      const sameBarcode = await this.prisma.product.findFirst({
-        where: { barcode: { equals: barcode, mode: 'insensitive' } },
-        select: { deletedAt: true },
-      });
-      if (sameBarcode) {
-        throw new ConflictException(
-          sameBarcode.deletedAt
-            ? `El código ${barcode} pertenece a un producto eliminado`
-            : `Ya existe un producto con el código ${barcode}`,
-        );
-      }
-    }
+    const barcodes = data.barcodes ?? [];
+    await this.assertBarcodesAvailable(barcodes);
 
     try {
-      // Nested write: el producto y sus variantes se crean en una sola transacción.
+      // Nested write: el producto, sus códigos y sus variantes se crean en una sola transacción.
       const product = await this.prisma.product.create({
         data: {
-          barcode: barcode ?? null,
+          barcodes: { create: barcodes.map((code) => ({ code })) },
           name: data.name,
           description: data.description,
           buyPrice: data.buyPrice,
@@ -97,16 +91,14 @@ export class ProductsService {
             })),
           },
         },
-        include: withVariants,
+        include: productInclude,
       });
       return product;
     } catch (error) {
       // Otra request creó el mismo código entre la verificación y el insert.
       if (isUniqueViolation(error)) {
         throw new ConflictException(
-          barcode
-            ? `Ya existe un producto con el código ${barcode}`
-            : 'Ya existe un producto con esos datos',
+          'Alguno de los códigos de barras ya pertenece a otro producto. Intentá de nuevo.',
         );
       }
       throw error;
@@ -120,7 +112,7 @@ export class ProductsService {
       this.prisma.product.count({ where: notDeleted }),
       this.prisma.product.findMany({
         where: notDeleted,
-        include: withVariants,
+        include: productInclude,
         // El id desempata nombres iguales para que las páginas no se repitan ni salteen productos.
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
         skip: (page - 1) * PAGE_SIZE,
@@ -138,7 +130,7 @@ export class ProductsService {
     const ids = await this.findIdsByName(name);
     const products = await this.prisma.product.findMany({
       where: { id: { in: ids }, ...notDeleted },
-      include: withVariants,
+      include: productInclude,
     });
     // findMany no respeta el orden de `in`: se reordena según el ranking.
     const byId = new Map(products.map((p) => [p.id, p]));
@@ -151,7 +143,7 @@ export class ProductsService {
   async findOne(id: number): Promise<ProductWithVariants> {
     const product = await this.prisma.product.findFirst({
       where: { id, ...notDeleted },
-      include: withVariants,
+      include: productInclude,
     });
     if (!product) {
       throw new NotFoundException(`No existe un producto con id ${id}`);
@@ -183,13 +175,47 @@ export class ProductsService {
   }
 
   private findProductByBarcode(barcode: string) {
-    // Sin distinguir mayúsculas, igual que la búsqueda del frontend.
     return this.prisma.product.findFirst({
       where: {
-        barcode: { equals: barcode, mode: 'insensitive' },
+        barcodes: { some: { code: codeEquals(barcode) } },
         ...notDeleted,
       },
-      include: withVariants,
+      include: productInclude,
+    });
+  }
+
+  /**
+   * Falla con 409 si alguno de los códigos ya es de otro producto (sin contar `exceptProductId`). Incluye los
+   * eliminados: conservan sus códigos de barras.
+   */
+  private async assertBarcodesAvailable(
+    barcodes: string[],
+    exceptProductId?: number,
+  ) {
+    if (barcodes.length === 0) return;
+    const taken = await this.prisma.productBarcode.findMany({
+      where: {
+        OR: barcodes.map((code) => ({ code: codeEquals(code) })),
+        ...(exceptProductId !== undefined && {
+          productId: { not: exceptProductId },
+        }),
+      },
+      select: {
+        code: true,
+        product: { select: { name: true, deletedAt: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+    if (taken.length === 0) return;
+
+    const messages = taken.map(({ code, product }) =>
+      product.deletedAt
+        ? `El código ${code} pertenece a un producto eliminado (${product.name})`
+        : `El código ${code} ya pertenece a ${product.name}`,
+    );
+    throw new ConflictException({
+      message: messages.join('. '),
+      conflicts: taken.map(({ code }) => code),
     });
   }
 
@@ -222,6 +248,46 @@ export class ProductsService {
       if (product) return [product.id];
     }
     return this.findIdsByName(term);
+  }
+
+  /** Agrega un código de barras al final de la lista del producto. */
+  async addBarcode(
+    productId: number,
+    { barcode }: AddBarcodeDto,
+  ): Promise<ProductWithVariants> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, ...notDeleted },
+      include: productInclude,
+    });
+    if (!product) {
+      throw new NotFoundException(`No existe un producto con id ${productId}`);
+    }
+    const codes = product.barcodes.map(({ code }) => code.toLowerCase());
+    if (codes.includes(barcode.toLowerCase())) {
+      throw new ConflictException(`El producto ya tiene el código ${barcode}`);
+    }
+    if (codes.length >= MAX_BARCODES) {
+      throw new ConflictException(
+        `Un producto puede tener hasta ${MAX_BARCODES} códigos de barras`,
+      );
+    }
+    await this.assertBarcodesAvailable([barcode], productId);
+
+    try {
+      return await this.prisma.product.update({
+        where: { id: productId },
+        data: { barcodes: { create: { code: barcode } } },
+        include: productInclude,
+      });
+    } catch (error) {
+      // Otra request tomó el mismo código entre la verificación y el insert.
+      if (isUniqueViolation(error)) {
+        throw new ConflictException(
+          `El código ${barcode} ya pertenece a otro producto. Intentá de nuevo.`,
+        );
+      }
+      throw error;
+    }
   }
 
   /** Crea varias variantes de una vez: o se crean todas o ninguna. */
@@ -258,7 +324,7 @@ export class ProductsService {
 
         const updated = await tx.product.findUniqueOrThrow({
           where: { id: productId },
-          include: withVariants,
+          include: productInclude,
         });
         return updated;
       });
@@ -273,10 +339,12 @@ export class ProductsService {
     }
   }
 
-  /** Actualiza solo los campos enviados. `barcode: null` le quita el código al producto. */
+  /**
+   * Actualiza solo los campos enviados. `barcodes` reemplaza todos los códigos del producto (`[]` los quita).
+   */
   async update(
     id: number,
-    { barcode, ...data }: UpdateProductDto,
+    { barcodes, ...data }: UpdateProductDto,
   ): Promise<ProductWithVariants> {
     const current = await this.prisma.product.findFirst({
       where: { id, ...notDeleted },
@@ -293,36 +361,29 @@ export class ProductsService {
       );
     }
 
-    if (barcode && barcode.toLowerCase() !== current.barcode?.toLowerCase()) {
-      // Incluye los eliminados: conservan su código de barras (es único en la DB).
-      const sameBarcode = await this.prisma.product.findFirst({
-        where: {
-          barcode: { equals: barcode, mode: 'insensitive' },
-          id: { not: id },
-        },
-        select: { deletedAt: true },
-      });
-      if (sameBarcode) {
-        throw new ConflictException(
-          sameBarcode.deletedAt
-            ? `El código ${barcode} pertenece a un producto eliminado`
-            : `Ya existe un producto con el código ${barcode}`,
-        );
-      }
-    }
+    if (barcodes) await this.assertBarcodesAvailable(barcodes, id);
 
     try {
-      const product = await this.prisma.product.update({
-        where: { id },
-        data: { ...data, ...(barcode !== undefined && { barcode }) },
-        include: withVariants,
+      return await this.prisma.$transaction(async (tx) => {
+        if (barcodes) {
+          // Se borran todos y se vuelven a crear en el orden recibido. Primero el borrado, para que mantener
+          // un código (o cambiarle mayúsculas) no choque con la restricción única.
+          await tx.productBarcode.deleteMany({ where: { productId: id } });
+          await tx.productBarcode.createMany({
+            data: barcodes.map((code) => ({ code, productId: id })),
+          });
+        }
+        return tx.product.update({
+          where: { id },
+          data,
+          include: productInclude,
+        });
       });
-      return product;
     } catch (error) {
       // Otra request tomó el mismo código entre la verificación y el update.
       if (isUniqueViolation(error)) {
         throw new ConflictException(
-          `Ya existe un producto con el código ${barcode}`,
+          'Alguno de los códigos de barras ya pertenece a otro producto. Intentá de nuevo.',
         );
       }
       throw error;
@@ -391,6 +452,35 @@ export class ProductsService {
       throw error;
     }
     return this.findOne(productId);
+  }
+
+  /** Sube (o reemplaza) la foto del producto a Cloudinary y guarda su URL. */
+  async setImage(
+    id: number,
+    file: Express.Multer.File | undefined,
+  ): Promise<ProductWithVariants> {
+    if (!file) {
+      throw new BadRequestException('Elegí una foto para subir');
+    }
+    await this.findOne(id);
+    const imageUrl = await this.cloudinary.uploadProductImage(id, file);
+    return this.prisma.product.update({
+      where: { id },
+      data: { imageUrl },
+      include: productInclude,
+    });
+  }
+
+  /** Borra la foto del producto (en Cloudinary y en la base). */
+  async removeImage(id: number): Promise<ProductWithVariants> {
+    const product = await this.findOne(id);
+    if (!product.imageUrl) return product;
+    await this.cloudinary.deleteProductImage(id);
+    return this.prisma.product.update({
+      where: { id },
+      data: { imageUrl: null },
+      include: productInclude,
+    });
   }
 
   /** Soft delete: el producto deja de verse, pero se conserva con sus variantes y su historial. */

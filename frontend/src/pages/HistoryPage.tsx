@@ -125,7 +125,15 @@ export function HistoryPage() {
           result.data.map((op) => (
             <tr key={op.id} className={`transition hover:bg-kleta-bg/50 ${op.cancelledAt ? 'opacity-60' : ''}`}>
               <td className="px-6 py-3.5 font-mono text-xs text-gray-500">{formatDateTime(new Date(op.createdAt))}</td>
-              <td className="px-6 py-3.5 font-mono text-kleta-light-plum">{op.barcode ?? '—'}</td>
+              <td className="px-6 py-3.5 font-mono text-kleta-light-plum">
+                {op.barcodes.length > 0
+                  ? op.barcodes.map((code) => (
+                      <span key={code} className="block">
+                        {code}
+                      </span>
+                    ))
+                  : '—'}
+              </td>
               <td className="px-6 py-3.5">
                 <span className="font-semibold text-kleta-plum">{op.name}</span>
                 <span className="block text-xs text-gray-500">{variantLabel(op)}</span>

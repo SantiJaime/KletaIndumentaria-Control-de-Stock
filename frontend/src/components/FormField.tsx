@@ -1,6 +1,6 @@
 import { useField } from 'formik'
 import { stateClasses } from './fieldStyles'
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
 
 interface FieldShellProps {
   name: string
@@ -75,6 +75,37 @@ export function TextField({
         />
         {adornment}
       </div>
+    </FieldShell>
+  )
+}
+
+type TextAreaFieldProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'name'> & {
+  name: string
+  label: ReactNode
+}
+
+/** Texto largo (ej. descripción). Con `maxLength` muestra cuántos caracteres van. */
+export function TextAreaField({ name, label, maxLength, rows = 3, ...textareaProps }: TextAreaFieldProps) {
+  const [field, meta] = useField<string>(name)
+  const hasError = Boolean(meta.touched && meta.error)
+
+  return (
+    <FieldShell name={name} label={label}>
+      <textarea
+        id={name}
+        {...field}
+        {...textareaProps}
+        rows={rows}
+        maxLength={maxLength}
+        aria-invalid={hasError}
+        aria-describedby={hasError ? `${name}-error` : undefined}
+        className={`w-full resize-y rounded-xl border bg-kleta-bg p-3.5 text-sm font-medium outline-none transition focus:border-transparent focus:ring-2 ${stateClasses(hasError)}`}
+      />
+      {maxLength && (
+        <p className="mt-1 text-right text-[11px] text-gray-400">
+          {field.value.length}/{maxLength}
+        </p>
+      )}
     </FieldShell>
   )
 }

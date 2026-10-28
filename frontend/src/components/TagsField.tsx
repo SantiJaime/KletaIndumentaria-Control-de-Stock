@@ -11,10 +11,23 @@ interface TagsFieldProps {
   suggestions?: string[]
   /** Grupos de valores que se agregan de una vez (ej. "XS – XL"); desaparecen cuando ya están todos agregados. */
   presets?: { label: string; values: string[] }[]
+  /** Limpia lo que se escribe o pega antes de agregarlo (ej. `sanitizeBarcode`). */
+  sanitize?: (value: string) => string
+  /** Letra monoespaciada (para códigos). */
+  mono?: boolean
 }
 
 /** Lista de etiquetas en un campo de Formik (`string[]`): Enter o coma agrega, × quita. */
-export function TagsField({ name, label, placeholder, maxLength, suggestions = [], presets = [] }: TagsFieldProps) {
+export function TagsField({
+  name,
+  label,
+  placeholder,
+  maxLength,
+  suggestions = [],
+  presets = [],
+  sanitize = (value) => value,
+  mono = false,
+}: TagsFieldProps) {
   const [field, meta, helpers] = useField<string[]>(name)
   const [draft, setDraft] = useState('')
   const tags = field.value
@@ -25,7 +38,7 @@ export function TagsField({ name, label, placeholder, maxLength, suggestions = [
   const add = (values: string[]) => {
     const next = [...tags]
     for (const raw of values) {
-      const value = raw.trim()
+      const value = sanitize(raw).trim()
       if (!value || next.some((t) => normalizeLabel(t) === normalizeLabel(value))) continue
       next.push(suggestions.find((s) => normalizeLabel(s) === normalizeLabel(value)) ?? value)
     }
@@ -64,7 +77,9 @@ export function TagsField({ name, label, placeholder, maxLength, suggestions = [
         {tags.map((tag) => (
           <span
             key={tag}
-            className="flex items-center gap-1 rounded-lg bg-kleta-rose px-2.5 py-1 text-xs font-semibold text-white"
+            className={`flex items-center gap-1 rounded-lg bg-kleta-rose px-2.5 py-1 text-xs font-semibold text-white ${
+              mono ? 'font-mono' : ''
+            }`}
           >
             {tag}
             <button
@@ -81,13 +96,15 @@ export function TagsField({ name, label, placeholder, maxLength, suggestions = [
           id={name}
           value={draft}
           maxLength={maxLength}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => setDraft(sanitize(e.target.value))}
           onKeyDown={onKeyDown}
           onBlur={commitDraft}
           placeholder={tags.length === 0 ? placeholder : undefined}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${name}-error` : undefined}
-          className="min-w-24 flex-1 bg-transparent px-1.5 py-1 text-sm font-medium outline-none"
+          className={`min-w-24 flex-1 bg-transparent px-1.5 py-1 text-sm font-medium outline-none ${
+            mono ? 'font-mono' : ''
+          }`}
         />
       </div>
 

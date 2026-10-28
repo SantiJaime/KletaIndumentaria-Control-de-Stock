@@ -102,9 +102,9 @@ export function ExistingProductPanel({
           <span className="text-base font-bold text-kleta-plum">{product.name}</span>
         </div>
         <div>
-          <span className="block text-xs text-gray-500">Código</span>
+          <span className="block text-xs text-gray-500">{product.barcodes.length > 1 ? 'Códigos' : 'Código'}</span>
           <span className="font-mono font-semibold text-kleta-light-plum">
-            {product.barcode ?? <span className="font-sans font-normal text-gray-400">Sin código</span>}
+            {product.barcodes.join(', ') || <span className="font-sans font-normal text-gray-400">Sin código</span>}
           </span>
         </div>
         <div>
@@ -208,7 +208,7 @@ export function ExistingProductPanel({
         onClose={() => setVariantModalOpen(false)}
         title="Nuevas variantes"
         icon="fa-solid fa-shirt"
-        wide
+        size="lg"
       >
         <NewVariantsForm
           variants={product.variants}

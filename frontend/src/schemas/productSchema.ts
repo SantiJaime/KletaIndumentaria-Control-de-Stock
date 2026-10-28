@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { sanitizeBarcode } from '../lib/barcode'
-import { requiredNumber, type NumberInputValue } from './common'
+import { barcodeList } from './barcodeSchema'
+import { DESCRIPTION_MAX_LENGTH, requiredNumber, type NumberInputValue } from './common'
 import {
   matrixToVariants,
   refineVariantMatrix,
@@ -14,13 +14,19 @@ const price = (label: string) =>
 
 export const productSchema = z
   .object({
-    // Opcional: sin letras ni números queda en `null` (producto sin código de barras).
-    barcode: z.string().transform((value) => sanitizeBarcode(value) || null),
+    // Opcional: puede no tener ninguno o tener varios.
+    barcodes: barcodeList,
     name: z
       .string()
       .trim()
       .min(1, 'Ingresá el nombre del producto')
       .max(80, 'El nombre no puede superar los 80 caracteres'),
+    description: z
+      .string()
+      .trim()
+      .max(DESCRIPTION_MAX_LENGTH, `La descripción no puede superar los ${DESCRIPTION_MAX_LENGTH} caracteres`)
+      // Opcional: vacía queda en `null` (sin descripción).
+      .transform((value) => value || null),
     buyPrice: price('de compra'),
     sellPrice: price('de venta'),
     ...variantMatrixShape,
@@ -40,8 +46,9 @@ export const productSchema = z
 export type ProductOutput = z.output<typeof productSchema>
 
 export interface ProductFormValues extends VariantMatrixValues {
-  barcode: string
+  barcodes: string[]
   name: string
+  description: string
   buyPrice: NumberInputValue
   sellPrice: NumberInputValue
 }

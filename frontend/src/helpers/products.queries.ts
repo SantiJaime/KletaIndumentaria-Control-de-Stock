@@ -50,8 +50,35 @@ export const getProduct = async (id: number) => {
 export const createProduct = async (product: NewProduct) => {
   const { data } = await api.post<FullProduct>("/products", {
     ...product,
-    barcode: product.barcode ? sanitizeBarcode(product.barcode) : undefined,
+    barcodes: product.barcodes.map(sanitizeBarcode).filter(Boolean),
   });
+  return data;
+};
+
+/** Vincula un código de barras a un producto existente; devuelve el producto actualizado. */
+export const addBarcode = async (productId: number, barcode: string) => {
+  const { data } = await api.post<FullProduct>(`/products/${productId}/barcodes`, {
+    barcode: sanitizeBarcode(barcode),
+  });
+  return data;
+};
+
+/** Sube (o reemplaza) la foto del producto; devuelve el producto actualizado. */
+export const uploadProductImage = async (productId: number, image: File) => {
+  const form = new FormData();
+  form.append("image", image);
+  const { data } = await api.post<FullProduct>(`/products/${productId}/image`, form, {
+    // `api` manda JSON por defecto: con multipart el navegador agrega el boundary.
+    headers: { "Content-Type": "multipart/form-data" },
+    // Subir una foto puede tardar más que un pedido común.
+    timeout: 60_000,
+  });
+  return data;
+};
+
+/** Quita la foto del producto; devuelve el producto actualizado. */
+export const deleteProductImage = async (productId: number) => {
+  const { data } = await api.delete<FullProduct>(`/products/${productId}/image`);
   return data;
 };
 
